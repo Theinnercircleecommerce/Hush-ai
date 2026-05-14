@@ -3,6 +3,18 @@
     <channel>
         <title>Hush</title>
         <item>
+            <title>1.0.2</title>
+            <pubDate>Thu, 14 May 2026 13:11:26 +0200</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
+            <enclosure url="https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/Hush-1.0.2.dmg" length="5345381" type="application/octet-stream" sparkle:edSignature="Tp1xcz+qAIohGtlKcB+7zyAJ0KSj8AJ89ByoRIfTHyavIUzd/V0DcVM5gDpYTyWL/q9NsdwSpvoDclkeSmHdAQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/Hush3-2.delta" sparkle:deltaFrom="2" length="104846" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977616" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="mVKEJXZ2urWDfC7+44E6kYhmcNS59z18+ipYPaXIJHJMTZCd2S7f7YoUhHl+z3SsL8noX/DONYXp11N1pl2TBw=="/>
+                <enclosure url="https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/Hush3-1.delta" sparkle:deltaFrom="1" length="190942" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977616" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="erbTqx0c/hyAEsmzL/SPm6phoixo3pvZPEPiqu7Jqzka8qpP3mb/35KWNrEDTlb7hmbqEjPWTkT3LdMUr8Z/Bg=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.0.1</title>
             <pubDate>Thu, 14 May 2026 13:04:21 +0200</pubDate>
             <sparkle:version>2</sparkle:version>
