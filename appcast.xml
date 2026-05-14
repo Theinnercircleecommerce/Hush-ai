@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Hush</title>
+        <item>
+            <title>1.0</title>
+            <pubDate>Thu, 14 May 2026 11:03:03 +0200</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
+            <enclosure url="https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/Hush-1.0.dmg" length="5311781" type="application/octet-stream" sparkle:edSignature="ZC9riQsR+x+uZ9UtKGA5oDY0TK78MyTine3wSrynLmFdTp/6+w8lzVQz4SWEeh5Ke2dbkMXDWe2uPjMdEAsVCQ=="/>
+        </item>
+    </channel>
+</rss>
