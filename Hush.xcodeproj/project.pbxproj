@@ -1,0 +1,394 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		035DBB471CBD56E9510A055C /* HushApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E2592035E374EB6327CA83 /* HushApp.swift */; };
+		046032355B84EBEA233AFFCF /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F243157C28E055FD38AEC73 /* OnboardingView.swift */; };
+		1BB1AE7A1C04273322EAC0C0 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C80FAC2021F99DA0E1B95 /* AppState.swift */; };
+		258D67A6A9BD85846F9816B3 /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A25211743EE10325D93AFA /* AudioCaptureService.swift */; };
+		3820174DC83D1A47E8FA15AC /* HUDWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4F57F33F56ED552474F72C /* HUDWindowController.swift */; };
+		4B7020A298FF5B6D0A4A77E4 /* TranscriptionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE80AE00E5D635DF751E40F /* TranscriptionRecord.swift */; };
+		642B17BE495952F879273FFC /* PasteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88DAC23CAD2076797A58E303 /* PasteService.swift */; };
+		850BFBE0F555E35DDF6553A4 /* HUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D380DDA4EC9EB4466889E8E /* HUDView.swift */; };
+		88443902F4AC6107BBB196C0 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE7FB64B11572B496C8B692 /* AppDelegate.swift */; };
+		8BC3F1126EBCE2B11EC1F1FE /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F109C994B5FB53F4734F7D4 /* HistoryStore.swift */; };
+		8E9D374E271BCF44356FBAD1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35672E2EE378F2417001A674 /* Settings.swift */; };
+		95CA5B62166FDABB3850CEFB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825C6403C4742DE7F119AB37 /* SettingsView.swift */; };
+		B940DE0D66A1B8E9526F2367 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 04FE120D6AE0C392FC3C5F78 /* KeyboardShortcuts */; };
+		E0A2933C723B40BB35834726 /* GroqTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCE4D18059B1EBBF825C8A2 /* GroqTranscriptionService.swift */; };
+		F2E1CCCEC041F0BD05F697BA /* HistoryDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D7F181B3A1E306428CF838E /* HistoryDashboardView.swift */; };
+		F6C00DCB3265E2C483036224 /* Hotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004732B6E033724FE17DA349 /* Hotkeys.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		004732B6E033724FE17DA349 /* Hotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hotkeys.swift; sourceTree = "<group>"; };
+		0D7F181B3A1E306428CF838E /* HistoryDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDashboardView.swift; sourceTree = "<group>"; };
+		2DE80AE00E5D635DF751E40F /* TranscriptionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRecord.swift; sourceTree = "<group>"; };
+		2F1C80FAC2021F99DA0E1B95 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		35672E2EE378F2417001A674 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		664D0852F7C4BB53CCD3F928 /* Hush.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hush.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6F243157C28E055FD38AEC73 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		7D4F57F33F56ED552474F72C /* HUDWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDWindowController.swift; sourceTree = "<group>"; };
+		7F109C994B5FB53F4734F7D4 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
+		825C6403C4742DE7F119AB37 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		85A25211743EE10325D93AFA /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };
+		88DAC23CAD2076797A58E303 /* PasteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteService.swift; sourceTree = "<group>"; };
+		8DCE4D18059B1EBBF825C8A2 /* GroqTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqTranscriptionService.swift; sourceTree = "<group>"; };
+		9D380DDA4EC9EB4466889E8E /* HUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDView.swift; sourceTree = "<group>"; };
+		C2E2592035E374EB6327CA83 /* HushApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HushApp.swift; sourceTree = "<group>"; };
+		FAE7FB64B11572B496C8B692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		05FFFB4393FEDC3D6D020F97 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B940DE0D66A1B8E9526F2367 /* KeyboardShortcuts in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		201311F7849053D32BE74D10 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				35672E2EE378F2417001A674 /* Settings.swift */,
+				2DE80AE00E5D635DF751E40F /* TranscriptionRecord.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		2141B7C04FC0DDA979BCAC32 = {
+			isa = PBXGroup;
+			children = (
+				5871864B31DD8AEBE1FC8EC7 /* Sources */,
+				E3B8C55CC9776F358EDB9706 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5871864B31DD8AEBE1FC8EC7 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				FAE7FB64B11572B496C8B692 /* AppDelegate.swift */,
+				C2E2592035E374EB6327CA83 /* HushApp.swift */,
+				5B5DC263D77B8AEA483B802A /* Core */,
+				201311F7849053D32BE74D10 /* Models */,
+				992F367B1F3446E627CC7A02 /* UI */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		5B5DC263D77B8AEA483B802A /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C80FAC2021F99DA0E1B95 /* AppState.swift */,
+				85A25211743EE10325D93AFA /* AudioCaptureService.swift */,
+				8DCE4D18059B1EBBF825C8A2 /* GroqTranscriptionService.swift */,
+				7F109C994B5FB53F4734F7D4 /* HistoryStore.swift */,
+				004732B6E033724FE17DA349 /* Hotkeys.swift */,
+				88DAC23CAD2076797A58E303 /* PasteService.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		992F367B1F3446E627CC7A02 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				0D7F181B3A1E306428CF838E /* HistoryDashboardView.swift */,
+				9D380DDA4EC9EB4466889E8E /* HUDView.swift */,
+				7D4F57F33F56ED552474F72C /* HUDWindowController.swift */,
+				6F243157C28E055FD38AEC73 /* OnboardingView.swift */,
+				825C6403C4742DE7F119AB37 /* SettingsView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		E3B8C55CC9776F358EDB9706 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				664D0852F7C4BB53CCD3F928 /* Hush.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2B3E4653A7BBE0607CCC48A4 /* Hush */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 177968F7A9DE2E587E4673AC /* Build configuration list for PBXNativeTarget "Hush" */;
+			buildPhases = (
+				3B5BE0B8938861B0F0795209 /* Sources */,
+				05FFFB4393FEDC3D6D020F97 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Hush;
+			packageProductDependencies = (
+				04FE120D6AE0C392FC3C5F78 /* KeyboardShortcuts */,
+			);
+			productName = Hush;
+			productReference = 664D0852F7C4BB53CCD3F928 /* Hush.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0F21E0AB7C84BD6590133952 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 5E562B37A696A22839D3BF87 /* Build configuration list for PBXProject "Hush" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2141B7C04FC0DDA979BCAC32;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5D77549E5C2759C552E5FF85 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E3B8C55CC9776F358EDB9706 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2B3E4653A7BBE0607CCC48A4 /* Hush */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3B5BE0B8938861B0F0795209 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				88443902F4AC6107BBB196C0 /* AppDelegate.swift in Sources */,
+				1BB1AE7A1C04273322EAC0C0 /* AppState.swift in Sources */,
+				258D67A6A9BD85846F9816B3 /* AudioCaptureService.swift in Sources */,
+				E0A2933C723B40BB35834726 /* GroqTranscriptionService.swift in Sources */,
+				850BFBE0F555E35DDF6553A4 /* HUDView.swift in Sources */,
+				3820174DC83D1A47E8FA15AC /* HUDWindowController.swift in Sources */,
+				F2E1CCCEC041F0BD05F697BA /* HistoryDashboardView.swift in Sources */,
+				8BC3F1126EBCE2B11EC1F1FE /* HistoryStore.swift in Sources */,
+				F6C00DCB3265E2C483036224 /* Hotkeys.swift in Sources */,
+				035DBB471CBD56E9510A055C /* HushApp.swift in Sources */,
+				046032355B84EBEA233AFFCF /* OnboardingView.swift in Sources */,
+				642B17BE495952F879273FFC /* PasteService.swift in Sources */,
+				8E9D374E271BCF44356FBAD1 /* Settings.swift in Sources */,
+				95CA5B62166FDABB3850CEFB /* SettingsView.swift in Sources */,
+				4B7020A298FF5B6D0A4A77E4 /* TranscriptionRecord.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0A8D4D0F2032A9B637FE6B21 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hush.Hush;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		1FAC0BCB90171D57937F6700 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5A7331402C57388FC0819F74 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		6DBB96D1DC366948035ECD48 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hush.Hush;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		177968F7A9DE2E587E4673AC /* Build configuration list for PBXNativeTarget "Hush" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A8D4D0F2032A9B637FE6B21 /* Debug */,
+				6DBB96D1DC366948035ECD48 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5E562B37A696A22839D3BF87 /* Build configuration list for PBXProject "Hush" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A7331402C57388FC0819F74 /* Debug */,
+				1FAC0BCB90171D57937F6700 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5D77549E5C2759C552E5FF85 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.16.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		04FE120D6AE0C392FC3C5F78 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D77549E5C2759C552E5FF85 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 0F21E0AB7C84BD6590133952 /* Project object */;
+}

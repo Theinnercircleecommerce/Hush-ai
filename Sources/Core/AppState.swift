@@ -9,6 +9,8 @@ class AppState: ObservableObject {
     
     let audioService = AudioCaptureService()
     let groqService = GroqTranscriptionService()
+    let localService = LocalTranscriptionService()
+    let ollamaService = OllamaCleanupService()
     private var cancellables = Set<AnyCancellable>()
     
     var isRecording: Bool {
@@ -77,7 +79,13 @@ class AppState: ObservableObject {
                 let model = AppSettings.shared.whisperModel
                 let language = AppSettings.shared.primaryLanguage
                 
-                let rawText = try await groqService.transcribe(fileURL: result.url, apiKey: apiKey, model: model, prompt: dictionaryWords, language: language)
+                let rawText: String
+                if AppSettings.shared.processingMode == "Cloud (Groq)" {
+                    rawText = try await groqService.transcribe(fileURL: result.url, apiKey: apiKey, model: model, prompt: dictionaryWords, language: language)
+                } else {
+                    let localModel = AppSettings.shared.whisperKitModelSize
+                    rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: dictionaryWords, language: language)
+                }
                 
                 // --- Whisper Hallucination Filter ---
                 let lowerText = rawText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "!", with: "").replacingOccurrences(of: "?", with: "")
@@ -94,8 +102,19 @@ class AppState: ObservableObject {
                 // ------------------------------------
                 
                 var finalText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                var showOllamaWarning = false
+                
                 if AppSettings.shared.aiCleanupEnabled {
-                    finalText = try await groqService.cleanup(text: rawText, apiKey: apiKey)
+                    if AppSettings.shared.processingMode == "Cloud (Groq)" {
+                        finalText = try await groqService.cleanup(text: rawText, apiKey: apiKey)
+                    } else {
+                        let ollamaModel = AppSettings.shared.ollamaModelName
+                        do {
+                            finalText = try await ollamaService.cleanup(text: rawText, modelName: ollamaModel)
+                        } catch OllamaCleanupService.OllamaError.notRunning {
+                            showOllamaWarning = true
+                        }
+                    }
                 }
                 
                 // Apply snippets
@@ -138,7 +157,16 @@ class AppState: ObservableObject {
                         }
                     }
                     
-                    self.hudState = .idle
+                    if showOllamaWarning {
+                        self.hudState = .error("Ollama not detected — raw transcription pasted.")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                            if case .error = self.hudState {
+                                self.hudState = .idle
+                            }
+                        }
+                    } else {
+                        self.hudState = .idle
+                    }
                 }
                 
             } catch {

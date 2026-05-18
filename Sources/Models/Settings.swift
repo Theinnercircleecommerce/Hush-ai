@@ -67,6 +67,16 @@ class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(stopSound, forKey: "stopSound") }
     }
     
+    @Published var processingMode: String {
+        didSet { UserDefaults.standard.set(processingMode, forKey: "processingMode") }
+    }
+    @Published var whisperKitModelSize: String {
+        didSet { UserDefaults.standard.set(whisperKitModelSize, forKey: "whisperKitModelSize") }
+    }
+    @Published var ollamaModelName: String {
+        didSet { UserDefaults.standard.set(ollamaModelName, forKey: "ollamaModelName") }
+    }
+    
     init() {
         let defaults = UserDefaults.standard
         
@@ -123,5 +133,8 @@ class AppSettings: ObservableObject {
         self.hudPosition = defaults.string(forKey: "hudPosition") ?? "bottom"
         self.startSound = defaults.string(forKey: "startSound") ?? "Ping"
         self.stopSound = defaults.string(forKey: "stopSound") ?? "Pop"
+        self.processingMode = defaults.string(forKey: "processingMode") ?? "Local (Private)"
+        self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "base"
+        self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
     }
 }

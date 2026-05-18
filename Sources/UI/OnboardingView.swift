@@ -19,7 +19,7 @@ struct OnboardingView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("Privacy-first voice dictation using Groq.")
+            Text("Privacy-first voice dictation.")
                 .font(.title3)
                 .foregroundColor(.secondary)
             
@@ -79,18 +79,19 @@ struct OnboardingView: View {
                     }
                 }
                 
-                // API Key
+                // AI Cleanup
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Groq API Key")
+                    Text("AI Text Cleanup (Optional)")
                         .fontWeight(.medium)
                     
-                    SecureField("Paste your API key here", text: $settings.groqAPIKey)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Text("For AI text cleanup, install Ollama from ollama.com, then run 'ollama pull llama3.2:3b' in Terminal. The app works perfectly without it, you'll just get the raw transcription.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     
-                    HStack {
-                        Link("Get a free API key at console.groq.com", destination: URL(string: "https://console.groq.com/keys")!)
-                            .font(.caption)
-                    }
+                    Link("Open ollama.com", destination: URL(string: "https://ollama.com")!)
+                        .font(.caption)
+                        .padding(.top, 4)
                 }
             }
             .padding(.horizontal, 40)
@@ -103,7 +104,7 @@ struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(settings.groqAPIKey.isEmpty || !micPermissionGranted)
+            .disabled(!micPermissionGranted)
             .padding(.bottom, 40)
         }
         .onAppear {

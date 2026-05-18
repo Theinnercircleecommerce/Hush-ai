@@ -1,0 +1,36 @@
+name: Hush
+options:
+  bundleIdPrefix: com.hush
+targets:
+  Hush:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [Sources]
+    dependencies:
+      - package: KeyboardShortcuts
+      - package: GRDB
+      - package: Sparkle
+      - package: WhisperKit
+    info:
+      path: Info.plist
+      properties:
+        LSUIElement: true # Menu bar app, doesn't appear in Dock
+        NSMicrophoneUsageDescription: "Hush needs microphone access to dictate text."
+        NSSpeechRecognitionUsageDescription: "Hush uses speech recognition to convert your voice to text."
+        # Accessibility access isn't strictly requested via Info.plist, but we prompt at runtime.
+        SUFeedURL: "https://yourdomain.com/appcast.xml"
+        SUPublicEDKey: "PLACEHOLDER_KEY" # This will be replaced later
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 1.14.0
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    from: 6.24.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    from: 0.9.0

@@ -3,6 +3,7 @@ import KeyboardShortcuts
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
+    case processing = "Processing"
     case system = "System"
     case vibeCoding = "Vibe coding"
     case experimental = "Experimental"
@@ -13,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .general: return "slider.horizontal.3"
+        case .processing: return "cpu"
         case .system: return "desktopcomputer"
         case .vibeCoding: return "sparkles"
         case .experimental: return "flask"
@@ -32,6 +34,13 @@ struct FullSettingsView: View {
             }
             .tabItem { Label(SettingsSection.general.rawValue, systemImage: SettingsSection.general.iconName) }
             .tag(SettingsSection.general)
+            
+            ScrollView {
+                ProcessingSettingsView()
+                    .padding()
+            }
+            .tabItem { Label(SettingsSection.processing.rawValue, systemImage: SettingsSection.processing.iconName) }
+            .tag(SettingsSection.processing)
             
             ScrollView {
                 SystemSettingsView()
@@ -325,23 +334,29 @@ struct AccountSettingsView: View {
                 Text("Account")
                     .font(.headline)
                 
-                SecureField("Groq API Key", text: $settings.groqAPIKey)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                
-                HStack {
-                    Link("Get API Key", destination: URL(string: "https://console.groq.com/keys")!)
-                    Spacer()
-                    Button(action: testConnection) {
-                        Text(isTesting ? "Testing..." : "Test Connection")
+                if settings.processingMode == "Cloud (Groq)" {
+                    SecureField("Groq API Key", text: $settings.groqAPIKey)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    
+                    HStack {
+                        Link("Get API Key", destination: URL(string: "https://console.groq.com/keys")!)
+                        Spacer()
+                        Button(action: testConnection) {
+                            Text(isTesting ? "Testing..." : "Test Connection")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .disabled(settings.groqAPIKey.isEmpty || isTesting)
                     }
-                    .buttonStyle(PillButtonStyle())
-                    .disabled(settings.groqAPIKey.isEmpty || isTesting)
-                }
-                
-                if !testResult.isEmpty {
-                    Text(testResult)
+                    
+                    if !testResult.isEmpty {
+                        Text(testResult)
+                            .font(.caption)
+                            .foregroundColor(testResult.contains("Success") ? .green : .red)
+                    }
+                } else {
+                    Text("API keys are only required for Cloud processing.")
                         .font(.caption)
-                        .foregroundColor(testResult.contains("Success") ? .green : .red)
+                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -387,6 +402,113 @@ struct AccountSettingsView: View {
                 DispatchQueue.main.async {
                     self.testResult = "Error: \(error.localizedDescription)"
                     self.isTesting = false
+                }
+            }
+        }
+    }
+}
+
+struct ProcessingSettingsView: View {
+    @StateObject private var settings = AppSettings.shared
+    @State private var isTestingOllama = false
+    @State private var ollamaTestResult = ""
+    
+    var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Processing Mode")
+                        .font(.headline)
+                    Spacer()
+                    Picker("", selection: $settings.processingMode) {
+                        Text("Local (Private)").tag("Local (Private)")
+                        Text("Cloud (Groq)").tag("Cloud (Groq)")
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .frame(width: 250)
+                }
+            }
+        }
+        
+        if settings.processingMode == "Local (Private)" {
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Local Transcription (WhisperKit)")
+                        .font(.headline)
+                    Text("Runs entirely on-device. Downloads model on first use (~140MB for base).")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    HStack {
+                        Text("Model Size")
+                        Spacer()
+                        Picker("", selection: $settings.whisperKitModelSize) {
+                            Text("Tiny (Fastest)").tag("tiny")
+                            Text("Base (Default)").tag("base")
+                            Text("Small (Accurate)").tag("small")
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(width: 150)
+                    }
+                }
+            }
+        }
+        
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AI Cleanup")
+                    .font(.headline)
+                
+                Toggle("Enable AI Cleanup", isOn: $settings.aiCleanupEnabled)
+                
+                if settings.aiCleanupEnabled && settings.processingMode == "Local (Private)" {
+                    Divider()
+                    Text("Local Cleanup (Ollama)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text("Requires Ollama running locally (http://localhost:11434).")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    HStack {
+                        Text("Model Name")
+                        Spacer()
+                        TextField("e.g. llama3.2:3b", text: $settings.ollamaModelName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .frame(width: 150)
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: testOllama) {
+                            Text(isTestingOllama ? "Testing..." : "Test Connection")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .disabled(isTestingOllama)
+                    }
+                    
+                    if !ollamaTestResult.isEmpty {
+                        Text(ollamaTestResult)
+                            .font(.caption)
+                            .foregroundColor(ollamaTestResult.contains("Success") ? .green : .red)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func testOllama() {
+        isTestingOllama = true
+        ollamaTestResult = ""
+        Task {
+            let service = OllamaCleanupService()
+            let isRunning = await service.checkIsRunning()
+            DispatchQueue.main.async {
+                self.isTestingOllama = false
+                if isRunning {
+                    self.ollamaTestResult = "Success! Ollama is running."
+                } else {
+                    self.ollamaTestResult = "Error: Ollama not detected."
                 }
             }
         }
