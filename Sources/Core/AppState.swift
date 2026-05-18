@@ -25,6 +25,11 @@ class AppState: ObservableObject {
     }
     
     func toggleRecording() {
+        if hudState == .transcribing {
+            // Ignore hotkey presses while already processing to prevent WhisperKit/CoreML deadlocks
+            return
+        }
+        
         if audioService.isRecording {
             stopRecording()
         } else {

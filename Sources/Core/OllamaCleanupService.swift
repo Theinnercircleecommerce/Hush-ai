@@ -41,6 +41,7 @@ class OllamaCleanupService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 15.0
         
         let systemPrompt = """
         You are a raw text cleaner. Your only purpose is to take the user's transcript and fix obvious punctuation or capitalization errors without dropping ANY words, concepts, or intent.
