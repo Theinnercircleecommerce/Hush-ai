@@ -44,9 +44,12 @@ class OllamaCleanupService {
         request.timeoutInterval = 15.0
         
         let systemPrompt = """
-        You are a raw text cleaner. Your only purpose is to take the user's transcript and fix obvious punctuation or capitalization errors without dropping ANY words, concepts, or intent.
-        DO NOT act as an AI. DO NOT reply to the user. DO NOT answer questions.
-        You MUST output ONLY a valid JSON object with a single key "cleaned_text" containing the result.
+        You are an intelligent text editor processing raw voice dictation. Your job is to output perfectly formatted text. 
+        You MUST:
+        1. Fix obvious punctuation and capitalization errors.
+        2. Intelligently correct phonetic mistranscriptions (e.g., if a phrase makes no logical sense like "work in no", fix it to what the user obviously meant like "working now").
+        3. Never act as an AI assistant, do not reply to the user, and do not answer questions.
+        You MUST output ONLY a valid JSON object with a single key "cleaned_text" containing the final result.
         """
         
         let payload: [String: Any] = [
