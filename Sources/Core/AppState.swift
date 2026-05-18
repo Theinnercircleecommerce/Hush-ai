@@ -21,6 +21,9 @@ class AppState: ObservableObject {
             .receive(on: RunLoop.main)
             .assign(to: \.audioLevel, on: self)
             .store(in: &cancellables)
+            
+        // Prewarm the transcription model in the background so it's instantly ready
+        localService.prewarm(modelSize: AppSettings.shared.whisperKitModelSize)
     }
     
     func toggleRecording() {

@@ -2,7 +2,7 @@ import Foundation
 import WhisperKit
 
 class LocalTranscriptionService {
-    private var whisperKit: WhisperKit?
+    private var whisperKitTask: Task<WhisperKit, Error>?
     private var currentModelSize: String = ""
     
     enum LocalTranscriptionError: LocalizedError {
@@ -17,6 +17,20 @@ class LocalTranscriptionService {
         }
     }
 
+    func prewarm(modelSize: String) {
+        var actualModel = modelSize
+        if actualModel != "tiny" && actualModel != "base" && actualModel != "small" {
+            actualModel = "base"
+        }
+        
+        if currentModelSize != actualModel || whisperKitTask == nil {
+            currentModelSize = actualModel
+            whisperKitTask = Task {
+                return try await WhisperKit(model: actualModel)
+            }
+        }
+    }
+
     func transcribe(fileURL: URL, modelSize: String, prompt: String? = nil, language: String? = nil) async throws -> String {
         // Map tiny, base, small to their respective WhisperKit identifiers
         var actualModel = modelSize
@@ -24,12 +38,17 @@ class LocalTranscriptionService {
             actualModel = "base"
         }
         
-        if whisperKit == nil || currentModelSize != actualModel {
-            whisperKit = try await WhisperKit(model: actualModel)
+        if currentModelSize != actualModel || whisperKitTask == nil {
             currentModelSize = actualModel
+            whisperKitTask = Task {
+                return try await WhisperKit(model: actualModel)
+            }
         }
         
-        guard let pipe = whisperKit else {
+        let pipe: WhisperKit
+        do {
+            pipe = try await whisperKitTask!.value
+        } catch {
             throw LocalTranscriptionError.initializationFailed
         }
         
