@@ -5,9 +5,6 @@ import Security
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
     
-    @Published var whisperModel: String {
-        didSet { UserDefaults.standard.set(whisperModel, forKey: "whisperModel") }
-    }
     @Published var aiCleanupEnabled: Bool {
         didSet { UserDefaults.standard.set(aiCleanupEnabled, forKey: "aiCleanupEnabled") }
     }
@@ -52,14 +49,6 @@ class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(hudPosition, forKey: "hudPosition") }
     }
     
-    @Published var groqAPIKey: String {
-        didSet { 
-            UserDefaults.standard.set(groqAPIKey, forKey: "groqAPIKey")
-            if !groqAPIKey.isEmpty {
-                hasCompletedOnboarding = true
-            }
-        }
-    }
     @Published var startSound: String {
         didSet { UserDefaults.standard.set(startSound, forKey: "startSound") }
     }
@@ -67,9 +56,6 @@ class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(stopSound, forKey: "stopSound") }
     }
     
-    @Published var processingMode: String {
-        didSet { UserDefaults.standard.set(processingMode, forKey: "processingMode") }
-    }
     @Published var whisperKitModelSize: String {
         didSet { UserDefaults.standard.set(whisperKitModelSize, forKey: "whisperKitModelSize") }
     }
@@ -80,8 +66,6 @@ class AppSettings: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         
-        self.whisperModel = defaults.string(forKey: "whisperModel") ?? "whisper-large-v3-turbo"
-        
         if defaults.object(forKey: "aiCleanupEnabled") != nil {
             self.aiCleanupEnabled = defaults.bool(forKey: "aiCleanupEnabled")
         } else {
@@ -89,14 +73,7 @@ class AppSettings: ObservableObject {
         }
         
         self.selectedMicrophoneID = defaults.string(forKey: "selectedMicrophoneID") ?? ""
-        let loadedKey = defaults.string(forKey: "groqAPIKey") ?? ""
-        self.groqAPIKey = loadedKey
-        
-        if !loadedKey.isEmpty {
-            self.hasCompletedOnboarding = true
-        } else {
-            self.hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
-        }
+        self.hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         
         if defaults.object(forKey: "dailyWordGoal") != nil {
             self.dailyWordGoal = defaults.integer(forKey: "dailyWordGoal")
@@ -133,8 +110,7 @@ class AppSettings: ObservableObject {
         self.hudPosition = defaults.string(forKey: "hudPosition") ?? "bottom"
         self.startSound = defaults.string(forKey: "startSound") ?? "Ping"
         self.stopSound = defaults.string(forKey: "stopSound") ?? "Pop"
-        self.processingMode = defaults.string(forKey: "processingMode") ?? "Local (Private)"
-        self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "base"
+        self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
     }
 }

@@ -8,7 +8,6 @@ class AppState: ObservableObject {
     @Published var audioLevel: Float = 0.0
     
     let audioService = AudioCaptureService()
-    let groqService = GroqTranscriptionService()
     let localService = LocalTranscriptionService()
     let ollamaService = OllamaCleanupService()
     private var cancellables = Set<AnyCancellable>()
@@ -80,17 +79,9 @@ class AppState: ObservableObject {
         
         Task {
             do {
-                let apiKey = AppSettings.shared.groqAPIKey
-                let model = AppSettings.shared.whisperModel
                 let language = AppSettings.shared.primaryLanguage
-                
-                let rawText: String
-                if AppSettings.shared.processingMode == "Cloud (Groq)" {
-                    rawText = try await groqService.transcribe(fileURL: result.url, apiKey: apiKey, model: model, prompt: dictionaryWords, language: language)
-                } else {
-                    let localModel = AppSettings.shared.whisperKitModelSize
-                    rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: dictionaryWords, language: language)
-                }
+                let localModel = AppSettings.shared.whisperKitModelSize
+                let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: dictionaryWords, language: language)
                 
                 // --- Whisper Hallucination Filter ---
                 let lowerText = rawText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "!", with: "").replacingOccurrences(of: "?", with: "")
@@ -110,15 +101,11 @@ class AppState: ObservableObject {
                 var showOllamaWarning = false
                 
                 if AppSettings.shared.aiCleanupEnabled {
-                    if AppSettings.shared.processingMode == "Cloud (Groq)" {
-                        finalText = try await groqService.cleanup(text: rawText, apiKey: apiKey)
-                    } else {
-                        let ollamaModel = AppSettings.shared.ollamaModelName
-                        do {
-                            finalText = try await ollamaService.cleanup(text: rawText, modelName: ollamaModel)
-                        } catch OllamaCleanupService.OllamaError.notRunning {
-                            showOllamaWarning = true
-                        }
+                    let ollamaModel = AppSettings.shared.ollamaModelName
+                    do {
+                        finalText = try await ollamaService.cleanup(text: rawText, modelName: ollamaModel)
+                    } catch OllamaCleanupService.OllamaError.notRunning {
+                        showOllamaWarning = true
                     }
                 }
                 
