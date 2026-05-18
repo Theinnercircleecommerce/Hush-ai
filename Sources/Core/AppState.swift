@@ -127,12 +127,13 @@ class AppState: ObservableObject {
                 // Press Enter Command
                 var shouldPressEnter = false
                 if AppSettings.shared.pressEnterEnabled {
-                    let enterTriggers = ["press enter", "hit enter", "send message"]
+                    let enterTriggers = ["press enter", "hit enter", "click enter", "send message"]
                     let lowerText = finalText.lowercased()
+                    
                     for trigger in enterTriggers {
-                        if lowerText.hasSuffix(trigger) || lowerText.hasSuffix(trigger + ".") {
-                            let suffixLength = lowerText.hasSuffix(trigger + ".") ? trigger.count + 1 : trigger.count
-                            finalText = String(finalText.dropLast(suffixLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let range = lowerText.range(of: trigger + "[\\.\\!\\?]*$", options: .regularExpression) {
+                            let matchedLength = lowerText.distance(from: range.lowerBound, to: lowerText.endIndex)
+                            finalText = String(finalText.dropLast(matchedLength)).trimmingCharacters(in: .whitespacesAndNewlines)
                             shouldPressEnter = true
                             break
                         }
