@@ -84,20 +84,26 @@ class AppState: ObservableObject {
                 let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: dictionaryWords, language: language)
                 
                 // --- Whisper Hallucination Filter ---
-                let lowerText = rawText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "!", with: "").replacingOccurrences(of: "?", with: "")
+                var cleanedRawText = rawText
+                // Strip out common Whisper bracket/parenthesis tags like [BLANK_AUDIO], (Music playing), etc.
+                if let regex = try? NSRegularExpression(pattern: "\\[.*?\\]|\\(.*?\\)", options: []) {
+                    cleanedRawText = regex.stringByReplacingMatches(in: cleanedRawText, options: [], range: NSRange(location: 0, length: cleanedRawText.utf16.count), withTemplate: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                
+                let lowerText = cleanedRawText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "!", with: "").replacingOccurrences(of: "?", with: "")
                 let hallucinations = [
                     "thank you", "thank you for watching", "thanks for watching", "subscribe", 
                     "subscribe to the channel", "subscribe to my channel", "amém", "amem", 
-                    "bye", "you", "thanks", ""
+                    "bye", "you", "thanks", "blank audio", "silence", "music", "music playing", ""
                 ]
                 
-                if hallucinations.contains(lowerText) || (result.duration < 0.5 && lowerText.count < 10) {
+                if hallucinations.contains(lowerText) || (result.duration < 0.5 && lowerText.count < 10) || cleanedRawText.isEmpty {
                     DispatchQueue.main.async { self.hudState = .idle }
                     return
                 }
                 // ------------------------------------
                 
-                var finalText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                var finalText = cleanedRawText
                 var showOllamaWarning = false
                 
                 if AppSettings.shared.aiCleanupEnabled {
