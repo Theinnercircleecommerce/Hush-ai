@@ -24,6 +24,15 @@ class AppState: ObservableObject {
             
         // Prewarm the transcription model in the background so it's instantly ready
         localService.prewarm(modelSize: AppSettings.shared.whisperKitModelSize)
+        
+        // Listen for model changes to prewarm immediately
+        AppSettings.shared.$whisperKitModelSize
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newModelSize in
+                self?.localService.prewarm(modelSize: newModelSize)
+            }
+            .store(in: &cancellables)
     }
     
     func toggleRecording() {
