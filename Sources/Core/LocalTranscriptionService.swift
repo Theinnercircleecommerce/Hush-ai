@@ -19,7 +19,8 @@ class LocalTranscriptionService {
 
     func prewarm(modelSize: String) {
         var actualModel = modelSize
-        if actualModel != "tiny" && actualModel != "base" && actualModel != "small" {
+        let allowedModels = ["tiny", "tiny.en", "base", "base.en", "small", "small.en", "distil-large-v3", "large-v3", "large-v3-turbo"]
+        if !allowedModels.contains(actualModel) {
             actualModel = "base"
         }
         
@@ -34,7 +35,8 @@ class LocalTranscriptionService {
     func transcribe(fileURL: URL, modelSize: String, prompt: String? = nil, language: String? = nil) async throws -> String {
         // Map tiny, base, small to their respective WhisperKit identifiers
         var actualModel = modelSize
-        if actualModel != "tiny" && actualModel != "base" && actualModel != "small" {
+        let allowedModels = ["tiny", "tiny.en", "base", "base.en", "small", "small.en", "distil-large-v3", "large-v3", "large-v3-turbo"]
+        if !allowedModels.contains(actualModel) {
             actualModel = "base"
         }
         

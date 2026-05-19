@@ -332,11 +332,16 @@ struct ProcessingSettingsView: View {
                     Spacer()
                     Picker("", selection: $settings.whisperKitModelSize) {
                         Text("Tiny (Fastest)").tag("tiny")
+                        Text("Tiny English").tag("tiny.en")
                         Text("Base (Default)").tag("base")
+                        Text("Base English (Good for Coding)").tag("base.en")
                         Text("Small (Accurate)").tag("small")
+                        Text("Small English (Very Accurate)").tag("small.en")
+                        Text("Distil Large v3 (Best for English)").tag("distil-large-v3")
+                        Text("Large v3 Turbo").tag("large-v3-turbo")
                     }
                     .pickerStyle(MenuPickerStyle())
-                    .frame(width: 150)
+                    .frame(width: 250)
                 }
             }
         }
