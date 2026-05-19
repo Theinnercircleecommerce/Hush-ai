@@ -25,6 +25,7 @@ class LocalTranscriptionService {
         }
         
         if currentModelSize != actualModel || whisperKitTask == nil {
+            whisperKitTask?.cancel()
             currentModelSize = actualModel
             whisperKitTask = Task {
                 return try await WhisperKit(model: actualModel)
@@ -41,6 +42,7 @@ class LocalTranscriptionService {
         }
         
         if currentModelSize != actualModel || whisperKitTask == nil {
+            whisperKitTask?.cancel()
             currentModelSize = actualModel
             whisperKitTask = Task {
                 return try await WhisperKit(model: actualModel)
