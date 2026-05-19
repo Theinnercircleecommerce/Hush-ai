@@ -33,7 +33,7 @@ struct WaveformView: View {
         let distance = abs(CGFloat(index) - center)
         
         // Max height for the center bar, decreasing outwards
-        let maxHeight: CGFloat = 32.0
+        let maxHeight: CGFloat = 18.0
         let attenuation = max(0, 1.0 - (distance * 0.25))
         
         // Randomize slightly to make it feel alive even when quiet
@@ -43,7 +43,7 @@ struct WaveformView: View {
         let activeLevel = max(CGFloat(level), 0.15)
         
         let calculated = baseHeight + (activeLevel * maxHeight * attenuation * randomFactor)
-        return min(max(baseHeight, calculated), 45.0)
+        return min(max(baseHeight, calculated), 24.0)
     }
 }
 
@@ -63,7 +63,6 @@ struct HUDView: View {
                         Capsule()
                             .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 
             case .recording:
                 // Black pill with orange waveform
@@ -76,7 +75,6 @@ struct HUDView: View {
                 .background(
                     Capsule()
                         .fill(Color.black)
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 )
                 
             case .transcribing:
@@ -100,7 +98,6 @@ struct HUDView: View {
                 .background(
                     Capsule()
                         .fill(Color.black)
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 )
                 
             case .error(let msg):
