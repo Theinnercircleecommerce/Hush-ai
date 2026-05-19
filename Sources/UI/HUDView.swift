@@ -69,9 +69,9 @@ struct HUDView: View {
                 HStack(spacing: 0) {
                     WaveformView(level: appState.audioLevel)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(height: 50)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 6)
+                .frame(height: 32)
                 .background(
                     Capsule()
                         .fill(Color.black)
@@ -92,9 +92,9 @@ struct HUDView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .orange))
                         .scaleEffect(0.6)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(height: 50)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 6)
+                .frame(height: 32)
                 .background(
                     Capsule()
                         .fill(Color.black)
