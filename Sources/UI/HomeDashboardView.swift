@@ -42,7 +42,8 @@ struct HomeDashboardView: View {
     
     var groupedRecords: [(String, [TranscriptionRecord])] {
         let calendar = Calendar.current
-        let dict = Dictionary(grouping: historyStore.records) { record -> String in
+        let recentRecords = Array(historyStore.records.prefix(50))
+        let dict = Dictionary(grouping: recentRecords) { record -> String in
             if calendar.isDateInToday(record.timestamp) { return "TODAY" }
             if calendar.isDateInYesterday(record.timestamp) { return "YESTERDAY" }
             let formatter = DateFormatter()

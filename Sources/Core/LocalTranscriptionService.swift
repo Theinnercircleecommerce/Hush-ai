@@ -6,12 +6,12 @@ class LocalTranscriptionService {
     private var currentModelSize: String = ""
     
     enum LocalTranscriptionError: LocalizedError {
-        case initializationFailed
+        case initializationFailed(String)
         case fileReadFailed
         
         var errorDescription: String? {
             switch self {
-            case .initializationFailed: return "Failed to initialize WhisperKit."
+            case .initializationFailed(let msg): return "Failed to initialize WhisperKit: \(msg)"
             case .fileReadFailed: return "Failed to read audio file for transcription."
             }
         }
@@ -28,7 +28,14 @@ class LocalTranscriptionService {
             whisperKitTask?.cancel()
             currentModelSize = actualModel
             whisperKitTask = Task {
-                return try await WhisperKit(model: actualModel)
+                let processor = AudioProcessor()
+                processor.audioEngine = nil // Destroy AVAudioEngine so macOS drops the mic privacy indicator
+                
+                let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+                let downloadBase = appSupport.appendingPathComponent("HushAI_WhisperKit", isDirectory: true)
+                try? FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+                
+                return try await WhisperKit(model: actualModel, downloadBase: downloadBase, audioProcessor: processor)
             }
         }
     }
@@ -45,7 +52,14 @@ class LocalTranscriptionService {
             whisperKitTask?.cancel()
             currentModelSize = actualModel
             whisperKitTask = Task {
-                return try await WhisperKit(model: actualModel)
+                let processor = AudioProcessor()
+                processor.audioEngine = nil // Destroy AVAudioEngine so macOS drops the mic privacy indicator
+                
+                let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+                let downloadBase = appSupport.appendingPathComponent("HushAI_WhisperKit", isDirectory: true)
+                try? FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+                
+                return try await WhisperKit(model: actualModel, downloadBase: downloadBase, audioProcessor: processor)
             }
         }
         
@@ -53,7 +67,7 @@ class LocalTranscriptionService {
         do {
             pipe = try await whisperKitTask!.value
         } catch {
-            throw LocalTranscriptionError.initializationFailed
+            throw LocalTranscriptionError.initializationFailed(error.localizedDescription)
         }
         
         var options = DecodingOptions()
