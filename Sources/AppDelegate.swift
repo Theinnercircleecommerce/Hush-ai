@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateActivationPolicy(showInDock: AppSettings.shared.showInDock)
         
         // Show the idle pill HUD persistently right away!
-        HUDWindowController.shared.show(appState: self.appState)
+        NotchNudgeController.shared.show(appState: self.appState)
         
         // Open onboarding if not completed, otherwise launch silently in the menu bar!
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
