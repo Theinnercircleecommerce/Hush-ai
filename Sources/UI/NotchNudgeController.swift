@@ -40,9 +40,13 @@ final class NotchNudgeController {
                     height: NudgeLayout.containerHeight
                 )
             )
-            panel.contentView = NSHostingView(
+            let hosting = NSHostingView(
                 rootView: NudgeView(appState: appState, metrics: metrics)
             )
+            // The notched screen reports a top safe-area inset; without this
+            // the hosting view pushes all content below the hardware notch.
+            hosting.safeAreaRegions = []
+            panel.contentView = hosting
 
             let x = screen.frame.midX - NudgeLayout.containerWidth / 2
             let y = screen.frame.maxY - NudgeLayout.containerHeight

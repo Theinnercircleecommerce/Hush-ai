@@ -37,14 +37,14 @@ struct NudgeView: View {
         Capsule()
             .fill(Color.white.opacity(0.16))
             .overlay(Capsule().stroke(Color.white.opacity(0.28), lineWidth: 1))
-            .frame(width: 250, height: 9)
+            .frame(width: 68, height: 9)
             .padding(.top, metrics.hasNotch ? metrics.notchHeight + 2 : 4)
     }
 
     // MARK: - Active expansion
 
     private var expansionWidth: CGFloat {
-        metrics.notchWidth + 240
+        metrics.hasNotch ? metrics.notchWidth + 60 : 200
     }
 
     private var expansion: some View {
@@ -58,12 +58,12 @@ struct NudgeView: View {
             HStack(spacing: 0) {
                 label
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 24)
+                    .padding(.leading, 14)
                 // Keep the physical notch area empty.
                 Color.clear.frame(width: metrics.notchWidth)
                 dots
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 24)
+                    .padding(.trailing, 14)
             }
             // Center content in the sliver below the hardware notch on
             // notched screens; vertically centered on notchless displays.

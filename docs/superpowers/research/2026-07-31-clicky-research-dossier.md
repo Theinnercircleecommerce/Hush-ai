@@ -164,7 +164,13 @@ markdown skills store. Good "simplest possible" sanity reference.
 - **Phase 3 (chat dropdown)**: `MenuBarPanelManager` + `CompanionPanelView`
   pattern; "ask Hush…" input bar styled like the screenshots (rounded dark
   field, attach + send, speaker toggle for TTS playback); double-tap ctrl
-  detection via the CGEvent tap monitor.
+  detection via the CGEvent tap monitor. ALSO: hover-over-nudge expands the
+  notch into a settings/tabs panel like the real Clicky — glide's
+  `GlideDynamicIslandManager` has the full hover-to-expand implementation
+  (hover target 220×32, spring 0.42/0.8, expanded 470×310).
+  LESSON from Phase 1: any SwiftUI content in a panel overlapping the notch
+  needs safe-area disabled (`NSHostingView.safeAreaRegions = []`) or macOS
+  pushes it 32 pt below the notch on the built-in display.
 - **Phase 4 (cursor triangle)**: port BlueCursorView mechanics (60fps
   follow, Bezier arc, POINT parsing + 3 coordinate transforms are the
   hard-won part — copy the math).
