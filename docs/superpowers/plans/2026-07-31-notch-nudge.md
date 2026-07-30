@@ -10,6 +10,35 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-31-notch-nudge-design.md`
 
+## ⚠️ STATE AS OF 2026-07-31 EVENING — READ BEFORE DOING ANYTHING
+
+Tasks 1–3 are DONE (commits 907f189, 588773b, 702ef29, b11a591 + later
+fixes) and were then HAND-TUNED against the real HeyClicky with pixel
+measurements. **The code in the repo is the source of truth, NOT the code
+blocks in Tasks 1–3 below** — those blocks are the original draft and are
+now partially outdated. NEVER re-apply, "restore," or regenerate
+`NudgeShape.swift`, `NudgeView.swift`, or `NotchNudgeController.swift`
+from this document. Only Tasks 4 and 5 remain.
+
+Hard-won invariants — breaking any of these is a regression:
+
+1. **Safe area must stay disabled twice**: `hosting.safeAreaRegions = []`
+   in `NotchNudgeController.swift` AND `.ignoresSafeArea()` on the root
+   frame in `NudgeView.swift`. Without BOTH, macOS silently pushes all
+   content 32pt below the hardware notch on the built-in display (looks
+   fine on external monitors — that's how the bug hides).
+2. **Idle differs per screen**: notched screen → `idleNotchShelf` (black
+   notch-hugging bar, `notchWidth + 72` wide, `notchHeight + 1` tall — a
+   pixel-measured match of HeyClicky's 250×33pt idle bar; NO pill).
+   Notchless screen → translucent `idlePill`. Do not unify these.
+3. Measured device facts (M2 MacBook Air 13": notch = 179×32pt): shelf
+   ≈ 251×33pt, flush with notch bottom, no lip below.
+4. A temporary geometry self-check writes `NUDGE-GEO` lines to
+   `/tmp/hush-nudge-geo.log` on launch (panel frame, safe-area insets,
+   notch size). Use it to verify placement after ANY nudge change:
+   panel top must equal screenMaxY, hostingSafeArea must be all zeros.
+   Remove this block only in Task 5 after the user signs off visually.
+
 ## Global Constraints
 
 - Build with `swift build` (SwiftPM). NEVER run `xcodebuild`. Full app bundle: `./build.sh` (produces `Hush.app` in repo root).
@@ -23,7 +52,7 @@
 
 ---
 
-### Task 1: Notch geometry + nudge shape
+### Task 1: Notch geometry + nudge shape — ✅ DONE (SKIP; repo code is newer than these blocks)
 
 **Files:**
 - Create: `Sources/UI/NudgeShape.swift`
@@ -135,7 +164,7 @@ git commit -m "feat: notch geometry helpers and nudge shape for new HUD"
 
 ---
 
-### Task 2: NudgeView (all four states)
+### Task 2: NudgeView (all four states) — ✅ DONE (SKIP; repo code is newer than these blocks)
 
 **Files:**
 - Create: `Sources/UI/NudgeView.swift`
@@ -326,7 +355,7 @@ git commit -m "feat: NudgeView with idle pill, listening, thinking, error states
 
 ---
 
-### Task 3: NotchNudgeController + wire into app
+### Task 3: NotchNudgeController + wire into app — ✅ DONE (SKIP; repo code is newer than these blocks)
 
 **Files:**
 - Create: `Sources/UI/NotchNudgeController.swift`

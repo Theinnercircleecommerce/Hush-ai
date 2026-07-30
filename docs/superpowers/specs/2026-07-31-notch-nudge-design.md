@@ -34,10 +34,12 @@ do not copy HeyClicky's bundled assets.
 
 Four states, driven by the existing `HUDState` enum:
 
-1. **Idle** — thin, wide, translucent light-gray pill hugging the very top
-   edge of the screen, centered below the notch. Wider and more see-through
-   than the current Hush pill (reference: side-by-side screenshot). No
-   content inside.
+1. **Idle** — (amended 2026-07-31 after visual QA on real hardware) On the
+   notched built-in display: NO pill — the notch itself simply reads a bit
+   wider (black shelf, `notchWidth + 72` × `notchHeight + 1`, a
+   pixel-measured match of HeyClicky's 250×33pt idle bar, flush with the
+   notch bottom). On notchless displays only: thin translucent light-gray
+   pill at the top edge.
 2. **Listening** (maps to `.recording`) — the pill hands off to a notch
    expansion: a black panel that makes the notch appear wider, with rounded
    lower corners. "Listening" label on the left side of the notch, animated

@@ -18,8 +18,13 @@ struct NudgeView: View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 if case .idle = appState.hudState {
-                    idlePill
-                        .transition(.opacity)
+                    if metrics.hasNotch {
+                        idleNotchShelf
+                            .transition(.opacity)
+                    } else {
+                        idlePill
+                            .transition(.opacity)
+                    }
                 } else {
                     expansion
                         .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
@@ -28,10 +33,21 @@ struct NudgeView: View {
             Spacer(minLength: 0)
         }
         .frame(width: NudgeLayout.containerWidth, height: NudgeLayout.containerHeight, alignment: .top)
+        .ignoresSafeArea()
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: appState.hudState)
     }
 
     // MARK: - Idle
+
+    /// Notched screens: no pill — the notch itself just reads slightly
+    /// wider, like HeyClicky at rest.
+    private var idleNotchShelf: some View {
+        // Measured from HeyClicky: idle bar = notch + ~35pt per side, flush
+        // with the notch bottom (no lip).
+        NudgeNotchShape(topCornerRadius: 6, bottomCornerRadius: 12)
+            .fill(Color.black)
+            .frame(width: metrics.notchWidth + 72, height: metrics.notchHeight + 1)
+    }
 
     private var idlePill: some View {
         Capsule()
