@@ -393,11 +393,4 @@ struct ProcessingSettingsView: View {
     }
 }
 
-struct HotkeyString {
-    static var current: String {
-        if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
-            return shortcut.description
-        }
-        return "⇧A"
-    }
-}
+// moved to NudgeMenuView.swift

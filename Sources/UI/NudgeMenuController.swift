@@ -216,15 +216,3 @@ final class KeyableMenuPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
-
-// Placeholder — replaced by NudgeMenuView.swift in Task 2
-struct NudgeMenuView: View {
-    @ObservedObject var appState: AppState
-    var onClose: () -> Void
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 24)
-            .fill(Color.black.opacity(0.96))
-            .overlay(Text("menu placeholder").foregroundColor(.white))
-    }
-}
