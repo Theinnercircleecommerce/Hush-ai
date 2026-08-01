@@ -69,6 +69,7 @@ final class NotchNudgeController {
                 }
             }
         }
+        NudgeMenuController.shared.attach(appState: appState)
     }
 }
 
