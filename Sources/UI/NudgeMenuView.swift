@@ -21,10 +21,17 @@ struct NudgeMenuView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            switch tab {
-            case .home: homeView
-            case .settings: settingsView
+            // Both tabs stay mounted so the first gear press is instant —
+            // same stuck-proof pattern NudgeView uses for its states.
+            ZStack(alignment: .top) {
+                homeView
+                    .opacity(tab == .home ? 1 : 0)
+                    .allowsHitTesting(tab == .home)
+                settingsView
+                    .opacity(tab == .settings ? 1 : 0)
+                    .allowsHitTesting(tab == .settings)
             }
+            .animation(.easeOut(duration: 0.18), value: tab)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -33,6 +40,10 @@ struct NudgeMenuView: View {
         )
         .clipShape(NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24))
         .ignoresSafeArea()
+        .onReceive(NotificationCenter.default.publisher(
+            for: Notification.Name("NudgeMenuWillOpen"))) { _ in
+            tab = .home
+        }
     }
 
     // MARK: - Top Bar
