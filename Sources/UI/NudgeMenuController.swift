@@ -18,6 +18,9 @@ final class NudgeMenuController {
     private var stateCancellable: AnyCancellable?
     private var hoverTimer: Timer?
     private var outsideTicks = 0
+    /// Screen the panel was opened on — the panel is reused, so its own
+    /// `screen` is unreliable while it is ordered out or mid-animation.
+    private var openScreen: NSScreen?
 
     func attach(appState: AppState) {
         self.appState = appState
@@ -27,7 +30,39 @@ final class NudgeMenuController {
             .sink { [weak self] state in
                 if state != .idle { self?.close() }
             }
+        makePanel(appState: appState)
         startHoverMonitoring()
+    }
+
+    /// Built once, kept alive forever. Creating the panel + hosting view is
+    /// what made the first hover stutter; doing it up front means open()
+    /// only has to reposition and animate.
+    private func makePanel(appState: AppState) {
+        guard menuPanel == nil else { return }
+        let panel = KeyableMenuPanel()
+        let hosting = NSHostingView(
+            rootView: NudgeMenuView(
+                appState: appState,
+                onClose: { [weak self] in self?.close() }
+            )
+        )
+        hosting.safeAreaRegions = []
+        panel.contentView = hosting
+
+        // Pre-warm: lay out the full view tree now (both tabs are mounted),
+        // so the first hover and first gear press pay nothing.
+        panel.setFrame(
+            NSRect(origin: .zero, size: NudgeMenuLayout.settingsSize),
+            display: false
+        )
+        hosting.layoutSubtreeIfNeeded()
+        panel.setFrame(
+            NSRect(origin: .zero, size: NudgeMenuLayout.homeSize),
+            display: false
+        )
+        hosting.layoutSubtreeIfNeeded()
+
+        menuPanel = panel
     }
 
     private func startHoverMonitoring() {
@@ -82,24 +117,16 @@ final class NudgeMenuController {
 
     func open(on screen: NSScreen) {
         guard !isOpen else { return }
-        guard let appState = appState else { return }
+        guard let appState = appState, let panel = menuPanel else { return }
         // Never open while the nudge is busy showing dictation state.
         if appState.hudState != .idle { return }
         isOpen = true
+        openScreen = screen
+        NotificationCenter.default.post(
+            name: Notification.Name("NudgeMenuWillOpen"), object: nil)
 
-        let panel = KeyableMenuPanel()
-        let hosting = NSHostingView(
-            rootView: NudgeMenuView(
-                appState: appState,
-                onClose: { [weak self] in self?.close() }
-            )
-        )
-        hosting.safeAreaRegions = []
-        panel.contentView = hosting
-
-        let metrics = NotchMetrics.metrics(for: screen)
         let size = NudgeMenuLayout.homeSize
-        let topY = screen.frame.maxY - (metrics.hasNotch ? 0 : 4)
+        let topY = screen.frame.maxY
 
         // Start collapsed at the notch-shelf footprint, spring out to full.
         let startFrame = Self.shelfFrame(for: screen)
@@ -117,14 +144,13 @@ final class NudgeMenuController {
             ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(endFrame, display: true)
         }
-        menuPanel = panel
         installClickOutsideMonitor()
     }
 
     /// Collapsed footprint the panel grows out of / shrinks back into.
     private static func shelfFrame(for screen: NSScreen) -> NSRect {
         let metrics = NotchMetrics.metrics(for: screen)
-        let topY = screen.frame.maxY - (metrics.hasNotch ? 0 : 4)
+        let topY = screen.frame.maxY
         let width: CGFloat = metrics.hasNotch ? metrics.notchWidth + 72 : 260
         let height: CGFloat = metrics.hasNotch ? metrics.notchHeight + 1 : 16
         return NSRect(
@@ -138,10 +164,9 @@ final class NudgeMenuController {
         guard isOpen, let panel = menuPanel else { return }
         isOpen = false
         removeClickOutsideMonitor()
-        menuPanel = nil
 
-        guard let screen = panel.screen ?? NSScreen.main else {
-            panel.close()
+        guard let screen = openScreen ?? panel.screen ?? NSScreen.main else {
+            panel.orderOut(nil)
             return
         }
         let collapsed = Self.shelfFrame(for: screen)
@@ -151,15 +176,16 @@ final class NudgeMenuController {
             ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(collapsed, display: true)
         }, completionHandler: {
-            panel.close()
+            panel.orderOut(nil)
         })
+        // menuPanel stays set — the panel is reused on the next open.
     }
 
     /// Called by NudgeMenuView when switching Home <-> Settings.
     func resize(to size: CGSize) {
-        guard let panel = menuPanel, let screen = panel.screen ?? NSScreen.main else { return }
-        let metrics = NotchMetrics.metrics(for: screen)
-        let topY = screen.frame.maxY - (metrics.hasNotch ? 0 : 4)
+        guard let panel = menuPanel,
+              let screen = openScreen ?? panel.screen ?? NSScreen.main else { return }
+        let topY = screen.frame.maxY
         let frame = NSRect(x: screen.frame.midX - size.width / 2,
                            y: topY - size.height,
                            width: size.width, height: size.height)
