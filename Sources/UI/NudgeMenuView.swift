@@ -169,11 +169,261 @@ struct NudgeMenuView: View {
         )
     }
 
-    // MARK: - Settings View (filled in Task 3)
+    // MARK: - Settings View
+
+    private let soundOptions = ["None", "Basso", "Blow", "Bottle", "Frog", "Funk",
+                                "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
+                                "Sosumi", "Submarine", "Tink"]
 
     private var settingsView: some View {
-        Text("Settings coming in Task 3")
-            .foregroundColor(.gray)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+
+                // DICTATION
+                settingsSection(title: "DICTATION") {
+                    VStack(spacing: 0) {
+                        settingsRow(icon: "cpu", title: "Model Size") {
+                            Picker("", selection: $settings.whisperKitModelSize) {
+                                Text("Tiny").tag("tiny")
+                                Text("Tiny English").tag("tiny.en")
+                                Text("Base").tag("base")
+                                Text("Base English").tag("base.en")
+                                Text("Small").tag("small")
+                                Text("Small English").tag("small.en")
+                                Text("Distil Large v3").tag("distil-large-v3")
+                                Text("Large v3 Turbo").tag("large-v3-turbo")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 160)
+                            .colorScheme(.dark)
+                        }
+                        rowDivider
+                        settingsRow(icon: "globe", title: "Language") {
+                            Picker("", selection: $settings.primaryLanguage) {
+                                Text("English").tag("en")
+                                Text("Dutch").tag("nl")
+                                Text("German").tag("de")
+                                Text("French").tag("fr")
+                                Text("Spanish").tag("es")
+                                Text("Auto-detect").tag("")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 130)
+                            .colorScheme(.dark)
+                        }
+                        rowDivider
+                        settingsRow(icon: "wand.and.stars", title: "AI Cleanup") {
+                            Toggle("", isOn: $settings.aiCleanupEnabled)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        if settings.aiCleanupEnabled {
+                            rowDivider
+                            settingsRow(icon: "server.rack", title: "Ollama Model") {
+                                TextField("e.g. llama3.2:3b", text: $settings.ollamaModelName)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 140)
+                                    .colorScheme(.dark)
+                            }
+                        }
+                        rowDivider
+                        settingsRow(icon: "return", title: "Press Enter Command") {
+                            Toggle("", isOn: $settings.pressEnterEnabled)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        rowDivider
+                        settingsRow(icon: "command", title: "Command Mode") {
+                            Toggle("", isOn: $settings.commandModeEnabled)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        rowDivider
+                        settingsRow(icon: "square.and.arrow.down.on.square", title: "Bulk Import") {
+                            Toggle("", isOn: $settings.bulkImportEnabled)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                    }
+                }
+
+                // SHORTCUTS
+                settingsSection(title: "SHORTCUTS") {
+                    settingsRow(icon: "keyboard", title: "Dictate") {
+                        KeyboardShortcuts.Recorder(for: .toggleRecord)
+                            .colorScheme(.dark)
+                    }
+                }
+
+                // SOUND
+                settingsSection(title: "SOUND") {
+                    VStack(spacing: 0) {
+                        settingsRow(icon: "speaker.wave.1", title: "Start Sound") {
+                            Picker("", selection: $settings.startSound) {
+                                ForEach(soundOptions, id: \.self) { Text($0).tag($0) }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 130)
+                            .colorScheme(.dark)
+                            .onChange(of: settings.startSound) { val in
+                                if val != "None" { NSSound(named: val)?.play() }
+                            }
+                        }
+                        rowDivider
+                        settingsRow(icon: "speaker.wave.3", title: "Stop Sound") {
+                            Picker("", selection: $settings.stopSound) {
+                                ForEach(soundOptions, id: \.self) { Text($0).tag($0) }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 130)
+                            .colorScheme(.dark)
+                            .onChange(of: settings.stopSound) { val in
+                                if val != "None" { NSSound(named: val)?.play() }
+                            }
+                        }
+                    }
+                }
+
+                // MICROPHONE — Task 4 replaces the placeholder with a real picker
+                settingsSection(title: "MICROPHONE") {
+                    settingsRow(icon: "mic", title: "Device") {
+                        Text(settings.selectedMicrophoneID.isEmpty
+                             ? "System default"
+                             : settings.selectedMicrophoneID)
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
+                }
+
+                // SYSTEM
+                settingsSection(title: "SYSTEM") {
+                    VStack(spacing: 0) {
+                        settingsRow(icon: "power", title: "Launch at Login") {
+                            Toggle("", isOn: $settings.launchAtLogin)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        rowDivider
+                        settingsRow(icon: "dock.rectangle",
+                                    title: "Show in Dock",
+                                    subtitle: "Turn off to keep Hush notch only.") {
+                            Toggle("", isOn: $settings.showInDock)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        rowDivider
+                        settingsRow(icon: "menubar.rectangle", title: "Menu Bar Icon") {
+                            Picker("", selection: $settings.menuBarIconStyle) {
+                                Text("Default").tag("default")
+                                Text("Monochrome").tag("monochrome")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 130)
+                            .colorScheme(.dark)
+                        }
+                    }
+                }
+
+                // SUPPORT
+                settingsSection(title: "SUPPORT") {
+                    Button(action: {
+                        AppDelegate.shared.updaterController.checkForUpdates(nil)
+                    }) {
+                        settingsRow(icon: "arrow.down.circle", title: "Check for Updates") {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 12))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // FOOTER
+                VStack(spacing: 8) {
+                    settingsSection(title: "") {
+                        Button(action: { NSApplication.shared.terminate(nil) }) {
+                            HStack {
+                                Image(systemName: "power")
+                                    .foregroundColor(.red)
+                                    .frame(width: 22)
+                                Text("Quit Hush")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.red)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                        Text("Hush \(version)")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(red: 0.35, green: 0.35, blue: 0.35))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    // MARK: - Settings Helpers
+
+    private func settingsSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+                    .padding(.leading, 4)
+            }
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+            )
+        }
+    }
+
+    private func settingsRow<Trailing: View>(
+        icon: String,
+        title: String,
+        subtitle: String? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.gray)
+                .frame(width: 22, alignment: .center)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                }
+            }
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private var rowDivider: some View {
+        Divider()
+            .background(Color(red: 0.18, green: 0.18, blue: 0.20))
+            .padding(.leading, 46)
     }
 }
