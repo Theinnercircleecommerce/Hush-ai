@@ -21,6 +21,11 @@ final class NudgeMenuController {
     /// Screen the panel was opened on — the panel is reused, so its own
     /// `screen` is unreliable while it is ordered out or mid-animation.
     private var openScreen: NSScreen?
+    /// Bumped on every close AND every open. The close animation's
+    /// completion handler only hides the panel if its generation is still
+    /// current — otherwise a re-hover during the shrink would be undone by
+    /// the stale completion, stranding the panel hidden with isOpen == true.
+    private var closeGeneration = 0
 
     func attach(appState: AppState) {
         self.appState = appState
@@ -92,6 +97,15 @@ final class NudgeMenuController {
 
     private func hoverTick() {
         guard let appState = appState else { return }
+
+        // Self-heal: if state says open but the panel is not visible,
+        // reset so the next hover can open. (Guards against any future
+        // desync of the same class as the close-animation race.)
+        if isOpen, let panel = menuPanel, !panel.isVisible {
+            isOpen = false
+            removeClickOutsideMonitor()
+        }
+
         let mouse = NSEvent.mouseLocation
 
         if !isOpen {
@@ -122,6 +136,7 @@ final class NudgeMenuController {
         if appState.hudState != .idle { return }
         isOpen = true
         openScreen = screen
+        closeGeneration += 1   // invalidate any in-flight close completion
         NotificationCenter.default.post(
             name: Notification.Name("NudgeMenuWillOpen"), object: nil)
 
@@ -164,6 +179,8 @@ final class NudgeMenuController {
         guard isOpen, let panel = menuPanel else { return }
         isOpen = false
         removeClickOutsideMonitor()
+        closeGeneration += 1
+        let generation = closeGeneration
 
         guard let screen = openScreen ?? panel.screen ?? NSScreen.main else {
             panel.orderOut(nil)
@@ -175,7 +192,10 @@ final class NudgeMenuController {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(collapsed, display: true)
-        }, completionHandler: {
+        }, completionHandler: { [weak self] in
+            guard let self = self,
+                  self.closeGeneration == generation,
+                  !self.isOpen else { return }   // a reopen happened — do NOT hide
             panel.orderOut(nil)
         })
         // menuPanel stays set — the panel is reused on the next open.
