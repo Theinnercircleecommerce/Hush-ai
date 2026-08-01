@@ -9,7 +9,6 @@ final class NudgeMenuController {
     static let shared = NudgeMenuController()
 
     private(set) var isOpen = false
-    private var catchers: [HoverCatcherPanel] = []
     private var menuPanel: KeyableMenuPanel?
     private var clickOutsideMonitor: Any?
     private weak var appState: AppState?
@@ -17,6 +16,8 @@ final class NudgeMenuController {
     private init() {}
 
     private var stateCancellable: AnyCancellable?
+    private var hoverTimer: Timer?
+    private var outsideTicks = 0
 
     func attach(appState: AppState) {
         self.appState = appState
@@ -26,30 +27,56 @@ final class NudgeMenuController {
             .sink { [weak self] state in
                 if state != .idle { self?.close() }
             }
-        rebuildCatchers()
+        startHoverMonitoring()
     }
 
-    func rebuildCatchers() {
-        for catcher in catchers { catcher.close() }
-        catchers.removeAll()
+    private func startHoverMonitoring() {
+        hoverTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.hoverTick()
+        }
+        // .common so the poll keeps running while menus/scrolling are active.
+        RunLoop.main.add(timer, forMode: .common)
+        hoverTimer = timer
+    }
 
-        for screen in NSScreen.screens {
-            let metrics = NotchMetrics.metrics(for: screen)
-            // Zone = idle shelf on notched screens; pill zone on others.
-            let zoneWidth: CGFloat = metrics.hasNotch ? metrics.notchWidth + 72 : 260
-            let zoneHeight: CGFloat = metrics.hasNotch ? metrics.notchHeight + 1 : 16
-            let rect = NSRect(
-                x: screen.frame.midX - zoneWidth / 2,
-                y: screen.frame.maxY - zoneHeight,
-                width: zoneWidth,
-                height: zoneHeight
-            )
-            let catcher = HoverCatcherPanel(zone: rect, screen: screen)
-            catcher.onHover = { [weak self] hoveredScreen in
-                self?.open(on: hoveredScreen)
+    /// The strip that counts as "hovering the notch": full notch width +
+    /// shelf wings, plus a few points below the notch line so the target
+    /// is reachable even though macOS nudges the cursor out of the notch.
+    private func hoverZone(for screen: NSScreen) -> NSRect {
+        let metrics = NotchMetrics.metrics(for: screen)
+        let width: CGFloat = metrics.hasNotch ? metrics.notchWidth + 72 : 260
+        let height: CGFloat = metrics.hasNotch ? metrics.notchHeight + 6 : 20
+        return NSRect(
+            x: screen.frame.midX - width / 2,
+            y: screen.frame.maxY - height,
+            width: width,
+            height: height
+        )
+    }
+
+    private func hoverTick() {
+        guard let appState = appState else { return }
+        let mouse = NSEvent.mouseLocation
+
+        if !isOpen {
+            guard appState.hudState == .idle else { return }
+            for screen in NSScreen.screens where hoverZone(for: screen).contains(mouse) {
+                open(on: screen)
+                return
             }
-            catcher.orderFront(nil)
-            catchers.append(catcher)
+        } else if let panel = menuPanel {
+            let nearPanel = panel.frame.insetBy(dx: -8, dy: -8).contains(mouse)
+            let inZone = NSScreen.screens.contains { hoverZone(for: $0).contains(mouse) }
+            if nearPanel || inZone {
+                outsideTicks = 0
+            } else {
+                outsideTicks += 1
+                if outsideTicks >= 4 {   // ~0.4s away → close
+                    outsideTicks = 0
+                    close()
+                }
+            }
         }
     }
 
@@ -141,58 +168,6 @@ final class NudgeMenuController {
 enum NudgeMenuLayout {
     static let homeSize = CGSize(width: 510, height: 260)
     static let settingsSize = CGSize(width: 510, height: 640)
-}
-
-/// Invisible strip over the notch/pill zone that only exists to receive
-/// mouse-entered events. The notch zone has no clickable system UI, so
-/// intercepting the mouse here is safe.
-final class HoverCatcherPanel: NSPanel {
-    var onHover: ((NSScreen) -> Void)?
-    private let targetScreen: NSScreen
-
-    init(zone: NSRect, screen: NSScreen) {
-        self.targetScreen = screen
-        super.init(contentRect: zone,
-                   styleMask: [.borderless, .nonactivatingPanel],
-                   backing: .buffered, defer: false)
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
-        isFloatingPanel = true
-        hidesOnDeactivate = false
-        isReleasedWhenClosed = false
-        ignoresMouseEvents = false
-        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 2)
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-
-        let tracker = HoverTrackerView(frame: NSRect(origin: .zero, size: zone.size))
-        tracker.onEntered = { [weak self] in
-            guard let self = self else { return }
-            self.onHover?(self.targetScreen)
-        }
-        contentView = tracker
-    }
-
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-}
-
-private final class HoverTrackerView: NSView {
-    var onEntered: (() -> Void)?
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways],
-            owner: self, userInfo: nil
-        ))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        onEntered?()
-    }
 }
 
 /// Non-activating but key-capable, so the shortcut recorder and text
