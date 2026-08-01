@@ -1,8 +1,8 @@
-# Dashboard Into Notch Implementation Plan
+# Dashboard Into Notch + Hover Reliability Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the dashboard window entirely — the notch panel becomes Hush's only UI (like HeyClicky). History, Dictionary, Snippets and a mini Insights view move into the panel as drill-in sub-pages; Scratchpad and the Style/Transforms placeholders are retired.
+**Goal:** (1) Hovering the notch or the pill ALWAYS opens the panel — fix the intermittent dead-hover bug. (2) Remove the dashboard window entirely — the notch panel becomes Hush's only UI (like HeyClicky). History, Dictionary, Snippets and a mini Insights view move into the panel as drill-in sub-pages; Scratchpad and the Style/Transforms placeholders are retired.
 
 **Architecture:** `NudgeMenuView` gets page-based navigation (`enum NudgePage`) with a back-arrow header, replacing the two-tab setup. Sub-pages are compact dark variants reusing the SAME stores the dashboard views use today (`HistoryStore`, and whatever backs Dictionary/Snippets — read those views first). The dashboard window, its sidebar views, and all "OpenDashboard" plumbing are deleted. Onboarding window stays.
 
@@ -27,6 +27,95 @@
 - Build: `swift build`; relaunch: `pkill -x Hush; ./build.sh && open Hush.app`.
   NEVER `xcodebuild`. Manual verification with the user. Geometry check:
   `tail -2 "$(getconf DARWIN_USER_TEMP_DIR)/hush-nudge-geo.log"`.
+
+---
+
+### Task 0: Hover ALWAYS opens (fix the reopen race)
+
+**User-reported bug:** sometimes hovering does nothing; clicking anywhere
+on screen, then hovering again, makes it work. Requirement: every hover
+over the notch or the pill opens the panel, every time.
+
+**Root cause:** `close()` animates the panel shut over ~0.22s and hides it
+(`panel.orderOut`) in the animation COMPLETION handler. If the user
+re-hovers during that animation, `open(on:)` runs (sets `isOpen = true`,
+reanimates) — and THEN the stale close completion fires and orders the
+panel out anyway. Now the panel is invisible while `isOpen == true`, so
+`hoverTick` never reopens. A click runs the click-outside monitor →
+`close()` → `isOpen = false` → hover works again. Exactly the reported
+symptom.
+
+**Files:**
+- Modify: `Sources/UI/NudgeMenuController.swift`
+
+- [ ] **Step 1: Generation-guard the close completion**
+
+Add a counter property:
+
+```swift
+    private var closeGeneration = 0
+```
+
+In `close()`, capture the generation and guard the completion:
+
+```swift
+    func close() {
+        guard isOpen, let panel = menuPanel else { return }
+        isOpen = false
+        removeClickOutsideMonitor()
+        closeGeneration += 1
+        let generation = closeGeneration
+        // ... existing shrink-back animation unchanged ...
+        NSAnimationContext.runAnimationGroup({ ctx in
+            // existing duration/timing/setFrame lines stay as they are
+        }, completionHandler: { [weak self] in
+            guard let self = self,
+                  self.closeGeneration == generation,
+                  !self.isOpen else { return }   // a reopen happened — do NOT hide
+            panel.orderOut(nil)
+        })
+    }
+```
+
+In `open(on:)`, first line after the guards:
+
+```swift
+        closeGeneration += 1   // invalidate any in-flight close completion
+```
+
+and make sure `open` always does `panel.alphaValue = 1` and
+`panel.orderFront(nil)` before its grow animation (so a mid-close reopen
+recovers no matter what state the panel was left in).
+
+- [ ] **Step 2: Belt-and-suspenders desync recovery in the poll**
+
+In `hoverTick()`'s `!isOpen` branch, opening is already the action — no
+change. Add to the TOP of `hoverTick()`:
+
+```swift
+        // Self-heal: if state says open but the panel is not visible,
+        // reset so the next hover can open. (Guards against any future
+        // desync of the same class.)
+        if isOpen, let panel = menuPanel, !panel.isVisible {
+            isOpen = false
+            removeClickOutsideMonitor()
+        }
+```
+
+- [ ] **Step 3: Verify the exact failure choreography**
+
+Build + relaunch. Torture test with the user: rapidly hover in → out →
+in (re-entering DURING the shrink animation) 10+ times on the notch, then
+10+ times on the external pill. The panel must open on EVERY re-hover.
+Then the normal sweep: mouse-out closes after ~0.4s, click-outside closes,
+dictation closes.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add Sources/UI/NudgeMenuController.swift
+git commit -m "fix: hover always opens — close-animation race could strand the panel hidden"
+```
 
 ---
 
@@ -142,10 +231,10 @@
 
 ### Task 5: QA with the user
 
-- [ ] Full sweep: first-hover smoothness (regression from persistent-panel
-  work), all six pages navigate and function, back buttons, reopen lands
-  on Home, dictation auto-close, click-outside, external pill behavior
-  unchanged, geometry log clean, menu-bar icon menu intact, Sparkle
-  update check reachable from Settings page.
+- [ ] Full sweep: rapid hover in/out torture test on notch AND pill (Task
+  0 regression — must open every time), first-hover smoothness, all six
+  pages navigate and function, back buttons, reopen lands on Home,
+  dictation auto-close, click-outside, geometry log clean, menu-bar icon
+  menu intact, Sparkle update check reachable from Settings page.
 - [ ] Fix nits, rebuild, re-check, final commit:
   `git commit -m "polish: notch-only UI QA fixes"`.
