@@ -1,0 +1,351 @@
+HeyClicky on a MacBook: what it looks like and how it behaves
+
+I found two distinct generations of HeyClicky:
+
+The original public/open-source Mac app, whose interface and implementation can be examined closely.
+The newer commercial version, demonstrated in recent videos but now developed privately.
+
+That distinction matters because the recognizable dark panel, cursor companion and push-to-talk interaction come from the original design, while newer features—spatial circles, autonomous agents, dictation and hands-free control—have been added rapidly during 2026. The developer says current work is private, so no public source confirms every pixel of the latest interface.
+
+The overall visual concept
+
+HeyClicky is essentially a small AI companion living at the top of the Mac screen, with a second visual presence beside your mouse cursor.
+
+Element	What you see
+Top panel	A dark, rounded floating panel beneath the menu bar or MacBook notch
+Cursor companion	A small blue pointer/marker that follows or moves around the screen
+Listening state	A compact animated waveform
+Thinking state	A small blue spinner
+Answer	Spoken audio, streamed text near the cursor, and sometimes an animated pointer
+Circle mode	A transparent drawing layer used to mark the relevant part of the screen
+Agent activity	Small task or “Clicky” instances associated with the top/notch area
+
+The result is deliberately less like opening ChatGPT and more like summoning a contextual assistant over whatever application is already open.
+
+1. The notch panel that drops down
+
+What people call the “notch” is visually a black or charcoal panel extending downward from the top of the MacBook screen.
+
+Technically, the original version was not an Apple Dynamic Island integration. It used:
+
+A macOS menu-bar status item
+A custom, borderless NSPanel
+Rounded corners and a shadow
+A non-activating window, so it did not take focus away from the application underneath
+Outside-click dismissal
+
+On a MacBook with a physical notch, anchoring the panel at the top makes it appear as though the notch itself has expanded downward.
+
+What was inside the original panel
+
+The publicly visible version was approximately 320 pixels wide and deliberately resembled a compact recording control:
+
+Green status indicator
+“Clicky” name
+“Active” status
+Circular close button
+Keyboard-shortcut instructions
+Cursor colour choices
+Settings control
+In some builds, an AI model selector
+
+Its own code described the intended aesthetic as similar to a dark, rounded and minimal recording panel.
+
+The screenshot above shows this older panel. The latest commercial UI may be more polished and more tightly fitted around the actual MacBook notch, but the core visual language remains: small, dark, floating, top-centred and collapsible.
+
+What happens when it is collapsed
+
+HeyClicky is designed as a menu-bar application rather than a conventional Mac app with a large window. The original version had no persistent main window or normal Dock-based workspace. You generally summon it with a keyboard shortcut, speak, receive the answer and continue working in the application beneath it.
+
+2. The small companion beside your cursor
+
+A central part of the design is a tiny blue visual marker next to the mouse pointer.
+
+It changes according to state:
+
+Idle: small blue arrow, flag or triangular marker
+Listening: five animated blue audio bars
+Processing: compact blue spinner
+Answering: text appears close to the cursor
+Pointing: the marker flies to an on-screen control that Clicky is referring to
+
+The original implementation animated this pointer along a curved path rather than abruptly teleporting it. It could also select the appropriate display in a multi-monitor arrangement.
+
+This is important to the product’s feel: Clicky does not merely say, “Open the settings menu.” It can move toward the menu and visually indicate which exact control it means.
+
+3. The “circle” option: spatial context
+
+The newer feature you are describing is officially presented as spatial context.
+
+The interaction is approximately:
+
+Press the Clicky hotkey.
+Move your cursor around—or draw a circle around—the precise region you want it to inspect.
+Speak your question while that region is marked.
+Clicky receives the screen image, your annotation and your spoken request together.
+It responds about that specific region, points back to something or gives the marked location to an agent.
+
+The creator demonstrates this with examples such as circling part of an anatomy image and asking what muscle it is, or circling an area of a website and asking an agent to place a button there.
+
+What the circle is doing technically
+
+It is best understood as a visual region-of-interest annotation, not merely a search gesture.
+
+The circle tells the model:
+
+“My question concerns these pixels, not everything else currently visible.”
+
+That eliminates the usual workflow of taking a screenshot, opening an editor, cropping it, drawing an arrow and uploading it to an AI chat.
+
+The circle may also convey placement intent. For example:
+
+“Put a button here.”
+“Why is this part misaligned?”
+“Explain this graph.”
+“What does this icon do?”
+“Change this section, not the rest of the page.”
+
+In current demonstrations, the direction can be two-way: you draw to direct Clicky, and Clicky can draw or point back to direct you.
+
+4. Talking to it: there are several voice modes
+
+HeyClicky now appears to have at least three related but distinct voice experiences.
+
+A. Screen-aware conversation
+
+This is the original core experience.
+
+You hold or press the hotkey, Clicky captures the current visual context, and you ask something aloud:
+
+“How do I add a transition here?”
+
+“Which button exports this?”
+
+“Why is this formula producing an error?”
+
+It interprets the screenshot and transcript together, answers aloud and can move its cursor indicator toward the relevant control. The official site describes this as pressing a hotkey so Clicky can “see what you see” and then asking aloud.
+
+In the older build, the shortcut was Control + Option. Recent demonstrations still refer to Control + Option for screen-aware interaction, although shortcuts may be configurable or change between releases.
+
+B. Screen-aware dictation
+
+Dictation is separate from asking Clicky a question.
+
+In a recent demonstration, holding Fn + Control lets you speak directly into whichever text field is focused. Rather than producing a generic transcription, Clicky can use what is visible to draft contextually appropriate text.
+
+Examples shown or described include:
+
+Drafting an email reply while Gmail is open
+Writing a prompt directly into Claude Code or a terminal
+Entering text into another Mac application
+Referring to visible material without manually copying it
+
+The creator claimed approximately 450 ms speech-to-text latency, but also openly described the feature as somewhat buggy at the time of the demonstration.
+
+C. Hands-free computer control
+
+A newer demonstration uses a conversational, real-time voice mode with no held shortcut.
+
+The creator asks Clicky to:
+
+Open Spotify and play music
+Reduce Spotify’s volume
+Open a Stripe dashboard
+Check whether Google Ads is connected
+Create a background advertising task
+Inspect Calendar
+Create a Reminder
+Open another application to verify the result
+
+Clicky answers verbally and performs or delegates the requested work. This demonstration used an OpenAI real-time model, whereas other Clicky functions use different providers and models.
+
+This appears to be closer to a computer-control assistant than the basic push-to-talk tutor.
+
+5. How its answers appear
+
+Clicky can answer through several channels simultaneously.
+
+Spoken response
+
+The primary experience is audio. It explains what it sees and gives the next instruction aloud, allowing you to remain inside the app you are using rather than reading a separate chat window.
+
+Text beside the cursor
+
+The original build displayed streamed response text in a floating bubble positioned near the cursor. Its implementation capped the bubble at roughly 340 pixels wide, updated it as tokens arrived and faded it after approximately six seconds.
+
+That means the interaction feels more like contextual subtitles than a permanent conversation window.
+
+Pointing to controls
+
+The older response pipeline allowed the model to return location instructions such as screen coordinates and a label. The app parsed those instructions and animated the blue cursor companion to the target.
+
+A typical answer might therefore be:
+
+“Click the circle-of-dots icon at the bottom.”
+
+At the same time, Clicky’s indicator travels toward that icon.
+
+Drawing on the screen
+
+Newer marketing also describes Clicky as being able to draw on the screen while explaining. This makes it useful for visually teaching software, marking locations, diagrams or interface elements.
+
+Agent acknowledgements and status
+
+When you ask it to complete work rather than explain something, Clicky may give a brief spoken acknowledgement, create a separate agent instance and let that instance continue in the background.
+
+Creator demonstrations describe:
+
+Multiple agents running simultaneously
+Individual Clicky bubbles or instances
+Hovering to see what each one is doing
+Completed and in-progress states
+Opening the output when an agent finishes
+Giving follow-up instructions to refine the same task
+
+Examples include building a small Mac application, creating a CSV, cleaning a desktop and creating reminders.
+
+The top/notch area therefore seems to serve not only as a voice panel but also as a compact task dock for autonomous Clicky workers.
+
+6. A realistic interaction sequence
+
+Imagine DaVinci Resolve is open.
+
+Visual state 1: idle
+
+Only the tiny Clicky/menu-bar presence is visible. Your editing interface remains unobstructed.
+
+Visual state 2: activation
+
+You hold Control + Option. A small blue waveform appears beside the cursor, and the top panel may extend downward.
+
+You ask:
+
+“How do I start colour grading this clip?”
+
+Visual state 3: processing
+
+The waveform changes to a spinner. Clicky sends the captured screen and voice transcript for interpretation.
+
+Visual state 4: answer
+
+It replies aloud:
+
+“Open the Color page using the circular dots icon at the bottom.”
+
+A short text version streams beside your cursor, and the blue marker moves toward the appropriate icon.
+
+Visual state 5: follow-up
+
+You ask:
+
+“What should I do next?”
+
+Because it has the visual and conversation context, it can continue from the current screen rather than making you explain the application again.
+
+This type of interaction has been demonstrated publicly, although one DaVinci Resolve recommendation concerning camera LUTs was technically incorrect. The creator acknowledged the error. That is a useful reminder that Clicky can locate interface elements convincingly while still giving questionable specialist advice.
+
+7. How the intelligence is assembled
+
+The original public version used a relatively clear pipeline:
+
+Capture the screen
+Record push-to-talk audio
+Transcribe speech
+Send screenshot and transcript to a vision-language model
+Stream the answer back
+Convert the response to speech
+Parse any pointing coordinates
+Animate the cursor companion
+
+The original launch used Claude for visual reasoning, AssemblyAI for transcription and ElevenLabs for voice.
+
+That is no longer the complete current stack. The privacy policy lists providers including:
+
+Anthropic
+OpenAI
+Deepgram
+Cerebras
+
+A recent creator update says a Claude model is used by default for improved screen understanding, while the hands-free demonstration used an OpenAI real-time model. This suggests different Clicky features route through different services rather than one universal model.
+
+8. Talk versus agent mode
+
+The current product makes an important distinction:
+
+Talk
+
+Used for:
+
+Asking what something means
+Getting software guidance
+Troubleshooting a visible problem
+Discussing what is on the screen
+Receiving explanations or step-by-step help
+
+It produces an answer but does not necessarily take control.
+
+Agent
+
+Used for:
+
+Opening and using applications
+Creating or changing files
+Completing multi-step workflows
+Working through connected services
+Building something
+Continuing in the background
+
+The official pricing treats talk messages and agent messages separately because agent operations are more resource-intensive.
+
+The wake phrase shown in current marketing is:
+
+“HeyClicky agent…”
+
+That phrasing tells Clicky you are asking it to do the work, not merely explain it.
+
+9. Privacy implications
+
+There is an important distinction between not storing a screenshot and not transmitting a screenshot.
+
+The official website says:
+
+The screen is captured only when the hotkey is pressed.
+Screenshots are not stored.
+Basic text summaries can be retained to preserve conversation context.
+
+The privacy policy additionally explains that screenshots, audio/transcripts and prompts are transmitted through Clicky’s backend and third-party AI providers for processing.
+
+So, in practical terms:
+
+It is not continuously recording the screen according to the company’s stated design.
+Activation sends the relevant screen context away from the Mac for processing.
+The image may not be retained as a saved screenshot, but external AI infrastructure still processes it.
+Sensitive material visible at activation could therefore be included.
+
+The safest use is to avoid activating it while passwords, private client records, financial data, confidential source code or other sensitive information are visible.
+
+The original app also required macOS permissions including microphone access, screen recording and Accessibility access. Those permissions are fundamental to hearing you, seeing the screen and interacting with applications.
+
+10. Current platform and pricing
+
+As of July 31, 2026, HeyClicky is Mac-only and requires macOS Sonoma 14.2 or newer. A Windows version is listed through a waitlist.
+
+The current site lists:
+
+Free: 25 talk messages per month, dictation and 25 agent messages
+Pro: $20 per month, unlimited talk/dictation and 150 agent messages
+Max: $100 per month, unlimited talk/dictation and 1,000 agent messages
+
+The site simultaneously contains some “100% free” marketing wording, so the product’s pricing and packaging appear to have evolved faster than every part of the website has been updated.
+
+Bottom line
+
+Visually, HeyClicky is best thought of as three connected interface layers:
+
+The notch-like dark panel at the top, used for activation, status and agent activity.
+The blue cursor companion, which listens, thinks, displays text and flies toward relevant controls.
+The transparent spatial overlay, which lets you circle an area and lets Clicky point or draw back.
+
+Its strongest differentiator is not simply voice chat. It combines your speech, the current screen, cursor position and hand-drawn spatial context into one interaction. It then responds through audio, cursor-adjacent text, visual pointing, drawings or actual agent actions.
+
+The interface is unusually coherent for screen-based assistance, but the software is changing very quickly. The current private build is more capable than the old public version, while the old source remains the clearest evidence for exactly how the visual panel, waveform, spinner, cursor bubble and animated pointing were constructed.

@@ -27,9 +27,10 @@ struct NotchMetrics {
         return NotchMetrics(hasNotch: false, notchWidth: 180, notchHeight: 0)
     }
 
-    /// Height of the black expansion bar content.
+    /// Height of the black expansion bar: flush with the hardware notch —
+    /// the active bar only grows sideways, never below the notch line.
     var expansionHeight: CGFloat {
-        hasNotch ? notchHeight + 8 : 34
+        hasNotch ? notchHeight + 1 : 36
     }
 }
 
