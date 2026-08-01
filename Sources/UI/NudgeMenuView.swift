@@ -284,16 +284,9 @@ struct NudgeMenuView: View {
                     }
                 }
 
-                // MICROPHONE — Task 4 replaces the placeholder with a real picker
+                // MICROPHONE
                 settingsSection(title: "MICROPHONE") {
-                    settingsRow(icon: "mic", title: "Device") {
-                        Text(settings.selectedMicrophoneID.isEmpty
-                             ? "System default"
-                             : settings.selectedMicrophoneID)
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                            .lineLimit(1)
-                    }
+                    MicrophonePickerRow(selectedID: $settings.selectedMicrophoneID)
                 }
 
                 // SYSTEM
@@ -425,5 +418,44 @@ struct NudgeMenuView: View {
         Divider()
             .background(Color(red: 0.18, green: 0.18, blue: 0.20))
             .padding(.leading, 46)
+    }
+}
+
+// MARK: - Microphone Picker Row
+
+private struct MicrophonePickerRow: View {
+    @Binding var selectedID: String
+    @State private var devices: [MicrophoneDevice] = []
+
+    private var selectedName: String {
+        if selectedID.isEmpty { return "System default" }
+        return devices.first(where: { $0.id == selectedID })?.name ?? selectedID
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mic")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.gray)
+                .frame(width: 22, alignment: .center)
+            Text("Device")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+            Spacer()
+            Picker("", selection: $selectedID) {
+                Text("System default").tag("")
+                ForEach(devices) { device in
+                    Text(device.name).tag(device.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 180)
+            .colorScheme(.dark)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .onAppear {
+            devices = AudioCaptureService.availableMicrophones()
+        }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudio
 
 class AudioCaptureService: NSObject, ObservableObject {
     // AVAudioEngine (not AVAudioRecorder) so the mic is fully released on stop.
@@ -29,6 +30,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         self.currentFileURL = fileURL
 
         let engine = AVAudioEngine()
+        applySelectedMicrophone(to: engine)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
 
         let file = try AVAudioFile(forWriting: fileURL, settings: inputFormat.settings)
@@ -78,5 +80,60 @@ class AudioCaptureService: NSObject, ObservableObject {
         audioLevel = 0.0
 
         return (url, duration)
+    }
+}
+
+// MARK: - Microphone enumeration & selection
+
+struct MicrophoneDevice: Identifiable, Hashable {
+    let id: String   // CoreAudio/AVCaptureDevice unique ID
+    let name: String
+}
+
+extension AudioCaptureService {
+    static func availableMicrophones() -> [MicrophoneDevice] {
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external],
+            mediaType: .audio,
+            position: .unspecified
+        )
+        return session.devices.map {
+            MicrophoneDevice(id: $0.uniqueID, name: $0.localizedName)
+        }
+    }
+
+    /// Translates a CoreAudio UID string to an AudioDeviceID.
+    static func audioDeviceID(forUID uid: String) -> AudioDeviceID? {
+        var deviceID = kAudioObjectUnknown
+        var cfUID = uid as CFString
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyTranslateUIDToDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = withUnsafeMutablePointer(to: &cfUID) { uidPtr in
+            AudioObjectGetPropertyData(
+                AudioObjectID(kAudioObjectSystemObject), &address,
+                UInt32(MemoryLayout<CFString>.size), uidPtr,
+                &size, &deviceID
+            )
+        }
+        return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
+    }
+
+    /// Points the engine's input node at the selected device. Call BEFORE
+    /// installing the tap / starting the engine.
+    func applySelectedMicrophone(to engine: AVAudioEngine) {
+        let uid = AppSettings.shared.selectedMicrophoneID
+        guard !uid.isEmpty,
+              var deviceID = Self.audioDeviceID(forUID: uid),
+              let unit = engine.inputNode.audioUnit else { return }
+        AudioUnitSetProperty(
+            unit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global, 0,
+            &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
     }
 }
