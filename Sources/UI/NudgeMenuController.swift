@@ -100,33 +100,59 @@ final class NudgeMenuController {
         let metrics = NotchMetrics.metrics(for: screen)
         let size = NudgeMenuLayout.homeSize
         let topY = screen.frame.maxY - (metrics.hasNotch ? 0 : 4)
-        panel.setFrame(
-            NSRect(x: screen.frame.midX - size.width / 2,
-                   y: topY - size.height,
-                   width: size.width, height: size.height),
-            display: false
+
+        // Start collapsed at the notch-shelf footprint, spring out to full.
+        let startFrame = Self.shelfFrame(for: screen)
+        let endFrame = NSRect(
+            x: screen.frame.midX - size.width / 2,
+            y: topY - size.height,
+            width: size.width, height: size.height
         )
-        panel.alphaValue = 0
+        panel.setFrame(startFrame, display: false)
+        panel.alphaValue = 1
         panel.orderFront(nil)
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.18
-            panel.animator().alphaValue = 1
+            ctx.duration = 0.28
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.0)
+            ctx.allowsImplicitAnimation = true
+            panel.animator().setFrame(endFrame, display: true)
         }
         menuPanel = panel
         installClickOutsideMonitor()
+    }
+
+    /// Collapsed footprint the panel grows out of / shrinks back into.
+    private static func shelfFrame(for screen: NSScreen) -> NSRect {
+        let metrics = NotchMetrics.metrics(for: screen)
+        let topY = screen.frame.maxY - (metrics.hasNotch ? 0 : 4)
+        let width: CGFloat = metrics.hasNotch ? metrics.notchWidth + 72 : 260
+        let height: CGFloat = metrics.hasNotch ? metrics.notchHeight + 1 : 16
+        return NSRect(
+            x: screen.frame.midX - width / 2,
+            y: topY - height,
+            width: width, height: height
+        )
     }
 
     func close() {
         guard isOpen, let panel = menuPanel else { return }
         isOpen = false
         removeClickOutsideMonitor()
+        menuPanel = nil
+
+        guard let screen = panel.screen ?? NSScreen.main else {
+            panel.close()
+            return
+        }
+        let collapsed = Self.shelfFrame(for: screen)
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.15
-            panel.animator().alphaValue = 0
+            ctx.duration = 0.22
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            ctx.allowsImplicitAnimation = true
+            panel.animator().setFrame(collapsed, display: true)
         }, completionHandler: {
             panel.close()
         })
-        menuPanel = nil
     }
 
     /// Called by NudgeMenuView when switching Home <-> Settings.

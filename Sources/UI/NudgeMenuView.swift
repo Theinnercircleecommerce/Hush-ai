@@ -28,9 +28,10 @@ struct NudgeMenuView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24)
                 .fill(Color(red: 0.05, green: 0.05, blue: 0.05))
         )
+        .clipShape(NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24))
         .ignoresSafeArea()
     }
 
