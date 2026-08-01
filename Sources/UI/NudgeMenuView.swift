@@ -248,12 +248,251 @@ struct NudgeMenuView: View {
 
     // MARK: - Sub-pages (filled in Tasks 2–3)
 
+    /// Recent transcriptions bucketed into TODAY / YESTERDAY / date, newest
+    /// first. `records` is already ordered timestamp-desc by the store.
+    private var groupedRecords: [(String, [TranscriptionRecord])] {
+        let calendar = Calendar.current
+        let recent = Array(history.records.prefix(60))
+        let dict = Dictionary(grouping: recent) { record -> String in
+            if calendar.isDateInToday(record.timestamp) { return "TODAY" }
+            if calendar.isDateInYesterday(record.timestamp) { return "YESTERDAY" }
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            return formatter.string(from: record.timestamp).uppercased()
+        }
+        return dict.sorted {
+            let d1 = $0.value.first?.timestamp ?? Date.distantPast
+            let d2 = $1.value.first?.timestamp ?? Date.distantPast
+            return d1 > d2
+        }
+    }
+
     private var historyView: some View {
-        subpagePlaceholder("History")
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                if groupedRecords.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "mic.slash")
+                            .font(.system(size: 26))
+                            .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.32))
+                        Text("No transcriptions yet")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 50)
+                } else {
+                    ForEach(groupedRecords, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+                                .padding(.leading, 4)
+                            VStack(spacing: 0) {
+                                ForEach(Array(group.1.enumerated()), id: \.element.id) { index, record in
+                                    if index > 0 { rowDivider }
+                                    historyRow(record)
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                            )
+                        }
+                    }
+
+                    Button(action: { showClearAllAlert() }) {
+                        HStack {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .frame(width: 22)
+                            Text("Clear all history")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.red)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func historyRow(_ record: TranscriptionRecord) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.cleanedTranscript)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text("\(record.timestamp, style: .time) · \(record.wordCount) words")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+            Spacer(minLength: 4)
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(record.cleanedTranscript, forType: .string)
+            }) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+            .help("Copy")
+            Button(action: { history.delete(record: record) }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(red: 0.55, green: 0.35, blue: 0.35))
+            }
+            .buttonStyle(.plain)
+            .help("Delete")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private func showClearAllAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Clear all history?"
+        alert.informativeText = "This permanently deletes every saved transcription."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear All")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            history.clearAll()
+        }
+    }
+
+    // MARK: - Insights
+
+    private var totalWords: Int {
+        history.records.reduce(0) { $0 + $1.wordCount }
+    }
+
+    private var averageWPM: Int {
+        let totalDuration = history.records.reduce(0) { $0 + $1.duration }
+        if totalDuration == 0 { return 0 }
+        return Int(Double(totalWords) / (totalDuration / 60.0))
+    }
+
+    private var mostActiveHour: String {
+        let calendar = Calendar.current
+        var hourCounts: [Int: Int] = [:]
+        for record in history.records {
+            let hour = calendar.component(.hour, from: record.timestamp)
+            hourCounts[hour, default: 0] += 1
+        }
+        guard let max = hourCounts.max(by: { $0.value < $1.value }) else { return "—" }
+        let ampm = max.key < 12 ? "AM" : "PM"
+        let h = max.key % 12 == 0 ? 12 : max.key % 12
+        return "\(h) \(ampm)"
+    }
+
+    /// Words per day for the last 14 days, oldest → newest.
+    private var wordsPerDay: [(date: Date, count: Int)] {
+        let calendar = Calendar.current
+        var dict: [Date: Int] = [:]
+        for i in 0..<14 {
+            let d = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -i, to: Date())!)
+            dict[d] = 0
+        }
+        for record in history.records {
+            let d = calendar.startOfDay(for: record.timestamp)
+            if dict[d] != nil { dict[d, default: 0] += record.wordCount }
+        }
+        return dict.map { (date: $0.key, count: $0.value) }.sorted { $0.date < $1.date }
     }
 
     private var insightsView: some View {
-        subpagePlaceholder("Insights")
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    insightCard(title: "total words", value: "\(totalWords)")
+                    insightCard(title: "avg WPM", value: "\(averageWPM)")
+                }
+                HStack(spacing: 10) {
+                    insightCard(title: "day streak", value: streakText)
+                    insightCard(title: "peak hour", value: mostActiveHour)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LAST 14 DAYS")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+                        .padding(.leading, 4)
+                    barChart
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                        )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var barChart: some View {
+        let data = wordsPerDay
+        let peak = max(data.map(\.count).max() ?? 0, 1)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(data, id: \.date) { item in
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Capsule()
+                            .fill(item.count > 0
+                                  ? Color(red: 0.35, green: 0.55, blue: 0.95)
+                                  : Color(red: 0.18, green: 0.18, blue: 0.20))
+                            .frame(height: max(3, CGFloat(item.count) / CGFloat(peak) * 90))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .help("\(item.count) words")
+                }
+            }
+            .frame(height: 90)
+            HStack {
+                Text("\(peak) peak")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+                Spacer()
+                Text("today")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private func insightCard(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+        )
     }
 
     private var dictionaryView: some View {
