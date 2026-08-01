@@ -45,10 +45,7 @@ class AppSettings: ObservableObject {
     @Published var scratchpadText: String {
         didSet { UserDefaults.standard.set(scratchpadText, forKey: "scratchpadText") }
     }
-    @Published var hudPosition: String {
-        didSet { UserDefaults.standard.set(hudPosition, forKey: "hudPosition") }
-    }
-    
+
     @Published var startSound: String {
         didSet { UserDefaults.standard.set(startSound, forKey: "startSound") }
     }
@@ -107,7 +104,6 @@ class AppSettings: ObservableObject {
         
         self.bulkImportEnabled = defaults.bool(forKey: "bulkImportEnabled")
         self.scratchpadText = defaults.string(forKey: "scratchpadText") ?? ""
-        self.hudPosition = defaults.string(forKey: "hudPosition") ?? "bottom"
         self.startSound = defaults.string(forKey: "startSound") ?? "Ping"
         self.stopSound = defaults.string(forKey: "stopSound") ?? "Pop"
         self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"

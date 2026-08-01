@@ -188,21 +188,7 @@ struct SystemSettingsView: View {
             }
             
             Divider()
-            
-            HStack {
-                Text("HUD Position")
-                    .font(.headline)
-                Spacer()
-                Picker("", selection: $settings.hudPosition) {
-                    Text("Top (Below Notch)").tag("top")
-                    Text("Bottom").tag("bottom")
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 200)
-            }
-            
-            Divider()
-            
+
             let soundOptions = ["None", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"]
             
             HStack {
@@ -388,7 +374,7 @@ struct ProcessingSettingsView: View {
             }
         }
     }
-    
+
     private func testOllama() {
         isTestingOllama = true
         ollamaTestResult = ""
@@ -404,5 +390,14 @@ struct ProcessingSettingsView: View {
                 }
             }
         }
+    }
+}
+
+struct HotkeyString {
+    static var current: String {
+        if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
+            return shortcut.description
+        }
+        return "⇧A"
     }
 }
