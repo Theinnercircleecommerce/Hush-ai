@@ -14,21 +14,29 @@ struct NudgeView: View {
         self.metrics = metrics
     }
 
+    private var isIdle: Bool {
+        if case .idle = appState.hudState { return true }
+        return false
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // Both states stay in the view tree; explicit opacity flips
+            // between them. Insert/remove transitions proved unreliable in
+            // non-activating panels (removed view could linger on screen).
             ZStack(alignment: .top) {
-                if case .idle = appState.hudState {
+                Group {
                     if metrics.hasNotch {
                         idleNotchShelf
-                            .transition(.opacity)
                     } else {
                         idlePill
-                            .transition(.opacity)
                     }
-                } else {
-                    expansion
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
                 }
+                .opacity(isIdle ? 1 : 0)
+
+                expansion
+                    .opacity(isIdle ? 0 : 1)
+                    .scaleEffect(isIdle ? 0.96 : 1.0, anchor: .top)
             }
             Spacer(minLength: 0)
         }
@@ -59,8 +67,10 @@ struct NudgeView: View {
 
     // MARK: - Active expansion
 
+    // Active bar: notch + 130pt flank per side (matches HeyClicky's ~440pt
+    // listening bar) so "Listening"/"Thinking" have room to render.
     private var expansionWidth: CGFloat {
-        metrics.hasNotch ? metrics.notchWidth + 60 : 200
+        metrics.hasNotch ? metrics.notchWidth + 260 : 260
     }
 
     private var expansion: some View {
@@ -74,16 +84,14 @@ struct NudgeView: View {
             HStack(spacing: 0) {
                 label
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 14)
-                // Keep the physical notch area empty.
-                Color.clear.frame(width: metrics.notchWidth)
+                    .padding(.leading, 22)
+                // Keep the physical notch area empty; label and dots live
+                // on the visible flanks, vertically centered in the bar.
+                Color.clear.frame(width: metrics.hasNotch ? metrics.notchWidth : 0)
                 dots
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 14)
+                    .padding(.trailing, 22)
             }
-            // Center content in the sliver below the hardware notch on
-            // notched screens; vertically centered on notchless displays.
-            .padding(.top, metrics.hasNotch ? metrics.notchHeight * 0.35 : 0)
         }
         .frame(width: expansionWidth, height: metrics.expansionHeight)
         .clipShape(NudgeNotchShape(
