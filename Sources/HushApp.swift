@@ -27,7 +27,7 @@ struct HushApp: App {
             .keyboardShortcut("d", modifiers: [.command, .shift])
             
             Button("Settings") {
-                UserDefaults.standard.set("Settings", forKey: "selectedSidebarItem")
+                UserDefaults.standard.set("Home", forKey: "selectedSidebarItem")
                 openWindow(id: "dashboard")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     NSApp.activate(ignoringOtherApps: true)
