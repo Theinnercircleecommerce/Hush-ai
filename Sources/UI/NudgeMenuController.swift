@@ -238,8 +238,9 @@ final class NudgeMenuController {
 }
 
 enum NudgeMenuLayout {
-    static let homeSize = CGSize(width: 510, height: 260)
+    static let homeSize = CGSize(width: 510, height: 380)
     static let settingsSize = CGSize(width: 510, height: 640)
+    static let subpageSize = CGSize(width: 510, height: 560)
 }
 
 /// Non-activating but key-capable, so the shortcut recorder and text

@@ -10,28 +10,50 @@ struct HotkeyString {
     }
 }
 
+enum NudgePage: Equatable {
+    case home, settings, history, dictionary, snippets, insights
+
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .settings: return "Settings"
+        case .history: return "History"
+        case .dictionary: return "Dictionary"
+        case .snippets: return "Snippets"
+        case .insights: return "Insights"
+        }
+    }
+
+    var panelSize: CGSize {
+        switch self {
+        case .home: return NudgeMenuLayout.homeSize
+        case .settings: return NudgeMenuLayout.settingsSize
+        default: return NudgeMenuLayout.subpageSize
+        }
+    }
+}
+
 struct NudgeMenuView: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
-    @State private var tab: NudgeMenuTab = .home
+    @ObservedObject private var history = HistoryStore.shared
+    @State private var page: NudgePage = .home
     var onClose: () -> Void
-
-    enum NudgeMenuTab { case home, settings }
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            // Both tabs stay mounted so the first gear press is instant —
-            // same stuck-proof pattern NudgeView uses for its states.
+            panelHeader
+            // Every page stays mounted so navigation is instant — same
+            // stuck-proof pattern NudgeView uses for its states.
             ZStack(alignment: .top) {
-                homeView
-                    .opacity(tab == .home ? 1 : 0)
-                    .allowsHitTesting(tab == .home)
-                settingsView
-                    .opacity(tab == .settings ? 1 : 0)
-                    .allowsHitTesting(tab == .settings)
+                pageLayer(homeView, for: .home)
+                pageLayer(settingsView, for: .settings)
+                pageLayer(historyView, for: .history)
+                pageLayer(dictionaryView, for: .dictionary)
+                pageLayer(snippetsView, for: .snippets)
+                pageLayer(insightsView, for: .insights)
             }
-            .animation(.easeOut(duration: 0.18), value: tab)
+            .animation(.easeOut(duration: 0.18), value: page)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -42,52 +64,69 @@ struct NudgeMenuView: View {
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(
             for: Notification.Name("NudgeMenuWillOpen"))) { _ in
-            tab = .home
+            page = .home
         }
     }
 
-    // MARK: - Top Bar
+    private func pageLayer<C: View>(_ content: C, for target: NudgePage) -> some View {
+        content
+            .opacity(page == target ? 1 : 0)
+            .allowsHitTesting(page == target)
+    }
 
-    private var topBar: some View {
-        HStack {
-            Label("Home", systemImage: "house.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(tab == .home ? .white : .gray)
-                .onTapGesture { switchTab(.home) }
-            Spacer()
-            Button(action: { switchTab(tab == .settings ? .home : .settings) }) {
-                Image(systemName: "gearshape.fill")
-                    .foregroundColor(tab == .settings ? .white : .gray)
+    // MARK: - Header
+
+    private var panelHeader: some View {
+        HStack(spacing: 8) {
+            if page == .home {
+                Label("Home", systemImage: "house.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: { navigate(to: .settings) }) {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: { navigate(to: .home) }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(page.title)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                }
+                .buttonStyle(.plain)
+                Spacer()
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 10)
     }
 
-    private func switchTab(_ newTab: NudgeMenuTab) {
-        guard newTab != tab else { return }
-        tab = newTab
-        NudgeMenuController.shared.resize(
-            to: newTab == .settings ? NudgeMenuLayout.settingsSize
-                                    : NudgeMenuLayout.homeSize
-        )
+    private func navigate(to newPage: NudgePage) {
+        guard newPage != page else { return }
+        page = newPage
+        NudgeMenuController.shared.resize(to: newPage.panelSize)
     }
 
-    // MARK: - Home View
+    // MARK: - Home
+
+    private var todayRecords: [TranscriptionRecord] {
+        let calendar = Calendar.current
+        return history.records.filter { calendar.isDateInToday($0.timestamp) }
+    }
 
     private var wordsTodayText: String {
-        let calendar = Calendar.current
-        let count = HistoryStore.shared.records
-            .filter { calendar.isDateInToday($0.timestamp) }
-            .reduce(0) { $0 + $1.wordCount }
-        return "\(count)"
+        "\(todayRecords.reduce(0) { $0 + $1.wordCount })"
     }
 
     private var streakText: String {
         let calendar = Calendar.current
-        let uniqueDays = Set(HistoryStore.shared.records.map {
+        let uniqueDays = Set(history.records.map {
             calendar.startOfDay(for: $0.timestamp)
         }).sorted(by: >)
         var streak = 0
@@ -110,7 +149,10 @@ struct NudgeMenuView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 10) {
-                    statCard(title: "words today", value: wordsTodayText)
+                    Button(action: { navigate(to: .insights) }) {
+                        statCard(title: "words today", value: wordsTodayText)
+                    }
+                    .buttonStyle(.plain)
                     statCard(title: "day streak", value: streakText)
                 }
                 VStack(alignment: .leading, spacing: 8) {
@@ -121,23 +163,45 @@ struct NudgeMenuView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Spacer(minLength: 0)
-            Button(action: {
-                onClose()
-                NotificationCenter.default.post(
-                    name: Notification.Name("OpenDashboard"), object: nil)
-            }) {
-                Label("Open Dashboard", systemImage: "rectangle.grid.2x2")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(red: 0.11, green: 0.11, blue: 0.12)))
+
+            VStack(spacing: 0) {
+                navRow(icon: "clock.arrow.circlepath", title: "History", page: .history)
+                rowDivider
+                navRow(icon: "character.book.closed", title: "Dictionary", page: .dictionary)
+                rowDivider
+                navRow(icon: "scissors", title: "Snippets", page: .snippets)
             }
-            .buttonStyle(.plain)
-            .foregroundColor(.white)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+            )
+
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 16)
+    }
+
+    private func navRow(icon: String, title: String, page target: NudgePage) -> some View {
+        Button(action: { navigate(to: target) }) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.gray)
+                    .frame(width: 22)
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func statCard(title: String, value: String) -> some View {
@@ -151,6 +215,7 @@ struct NudgeMenuView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(minWidth: 130, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
@@ -181,7 +246,32 @@ struct NudgeMenuView: View {
         )
     }
 
-    // MARK: - Settings View
+    // MARK: - Sub-pages (filled in Tasks 2–3)
+
+    private var historyView: some View {
+        subpagePlaceholder("History")
+    }
+
+    private var insightsView: some View {
+        subpagePlaceholder("Insights")
+    }
+
+    private var dictionaryView: some View {
+        subpagePlaceholder("Dictionary")
+    }
+
+    private var snippetsView: some View {
+        subpagePlaceholder("Snippets")
+    }
+
+    private func subpagePlaceholder(_ name: String) -> some View {
+        Text(name)
+            .font(.system(size: 12))
+            .foregroundColor(.gray)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Settings
 
     private let soundOptions = ["None", "Basso", "Blow", "Bottle", "Frog", "Funk",
                                 "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
@@ -359,6 +449,7 @@ struct NudgeMenuView: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 11)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -375,7 +466,7 @@ struct NudgeMenuView: View {
         }
     }
 
-    // MARK: - Settings Helpers
+    // MARK: - Shared row helpers
 
     private func settingsSection<Content: View>(
         title: String,
@@ -438,11 +529,6 @@ struct NudgeMenuView: View {
 private struct MicrophonePickerRow: View {
     @Binding var selectedID: String
     @State private var devices: [MicrophoneDevice] = []
-
-    private var selectedName: String {
-        if selectedID.isEmpty { return "System default" }
-        return devices.first(where: { $0.id == selectedID })?.name ?? selectedID
-    }
 
     var body: some View {
         HStack(spacing: 10) {
