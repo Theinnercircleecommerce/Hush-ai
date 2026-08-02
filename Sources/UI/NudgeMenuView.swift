@@ -11,11 +11,12 @@ struct HotkeyString {
 }
 
 enum NudgePage: Equatable {
-    case home, settings, history, dictionary, snippets, insights, scratchpad
+    case home, agents, settings, history, dictionary, snippets, insights, scratchpad
 
     var title: String {
         switch self {
         case .home: return "Home"
+        case .agents: return "Agents"
         case .settings: return "Settings"
         case .history: return "History"
         case .dictionary: return "Dictionary"
@@ -28,10 +29,21 @@ enum NudgePage: Equatable {
     var panelSize: CGSize {
         switch self {
         case .home: return NudgeMenuLayout.homeSize
+        case .agents: return NudgeMenuLayout.homeSize
         case .settings: return NudgeMenuLayout.settingsSize
         default: return NudgeMenuLayout.subpageSize
         }
     }
+}
+
+// MARK: - Shortcut Entry
+
+struct ShortcutEntry: Identifiable {
+    let id = UUID()
+    let name: String
+    let keys: [String]        // e.g. ["fn", "⌃"] rendered as keycaps
+    let subtitle: String?     // optional, e.g. "hold and speak"
+    let enabled: Bool         // false → grayed "coming soon" row
 }
 
 struct NudgeMenuView: View {
@@ -58,6 +70,7 @@ struct NudgeMenuView: View {
                 // stuck-proof pattern NudgeView uses for its states.
                 ZStack(alignment: .top) {
                     pageLayer(homeView, for: .home)
+                    pageLayer(agentsPlaceholderView, for: .agents)
                     pageLayer(settingsView, for: .settings)
                     pageLayer(historyView, for: .history)
                     pageLayer(dictionaryView, for: .dictionary)
@@ -111,19 +124,22 @@ struct NudgeMenuView: View {
     // MARK: - Header
 
     private var panelHeader: some View {
-        HStack(spacing: 8) {
-            if page == .home {
-                Label("Home", systemImage: "house.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
+        HStack(spacing: 0) {
+            if page == .home || page == .agents {
+                // Tab bar: Home | Agents on the left, gear on the right
+                HStack(spacing: 4) {
+                    tabButton(label: "Home", icon: "house.fill", target: .home)
+                    tabButton(label: "Agents", icon: "sparkles", target: .agents)
+                }
                 Spacer()
                 Button(action: { navigate(to: .settings) }) {
                     Image(systemName: "gearshape.fill")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
             } else {
-                // Scratchpad is entered from Settings, so back returns there.
+                // Sub-pages: back chevron + page title
                 Button(action: { navigate(to: page == .scratchpad ? .settings : .home) }) {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.left")
@@ -142,6 +158,28 @@ struct NudgeMenuView: View {
         .padding(.bottom, 10)
     }
 
+    private func tabButton(label: String, icon: String, target: NudgePage) -> some View {
+        let isSelected = page == target
+        return Button(action: { navigate(to: target) }) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(isSelected ? .white : Color(red: 0.5, green: 0.5, blue: 0.52))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected
+                          ? Color(red: 0.18, green: 0.18, blue: 0.20)
+                          : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func navigate(to newPage: NudgePage) {
         guard newPage != page else { return }
         withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
@@ -153,61 +191,61 @@ struct NudgeMenuView: View {
 
     // MARK: - Home
 
-    private var todayRecords: [TranscriptionRecord] {
-        let calendar = Calendar.current
-        return history.records.filter { calendar.isDateInToday($0.timestamp) }
-    }
-
-    private var wordsTodayText: String {
-        "\(todayRecords.reduce(0) { $0 + $1.wordCount })"
-    }
-
-    private var streakText: String {
-        let calendar = Calendar.current
-        let uniqueDays = Set(history.records.map {
-            calendar.startOfDay(for: $0.timestamp)
-        }).sorted(by: >)
-        var streak = 0
-        var currentDate = calendar.startOfDay(for: Date())
-        for day in uniqueDays {
-            if day == currentDate {
-                streak += 1
-                currentDate = calendar.date(byAdding: .day, value: -1, to: currentDate)!
-            } else if day == calendar.date(byAdding: .day, value: -1, to: currentDate)! {
-                streak += 1
-                currentDate = day
-            } else {
-                break
+    /// Derive keycap labels from the current hotkey string.
+    /// The shortcut description typically looks like "⌃⌥A" — we split on
+    /// character boundaries so modifier symbols become individual chips.
+    private func hotkeyKeycaps() -> [String] {
+        let raw = HotkeyString.current
+        // Known modifier prefixes to split out as individual keycaps
+        let modifiers: [String] = ["⇧", "⌃", "⌥", "⌘", "fn"]
+        var remaining = raw
+        var caps: [String] = []
+        // Greedily strip recognised modifier symbols from the front
+        var changed = true
+        while changed {
+            changed = false
+            for mod in modifiers {
+                if remaining.hasPrefix(mod) {
+                    caps.append(mod)
+                    remaining = String(remaining.dropFirst(mod.count))
+                    changed = true
+                    break
+                }
             }
         }
-        return "\(streak)"
+        // Whatever is left is the key (e.g. "A", "Space")
+        if !remaining.isEmpty {
+            caps.append(remaining)
+        }
+        // Fallback: if nothing parsed sensibly, return the whole string as one cap
+        return caps.isEmpty ? [raw] : caps
+    }
+
+    private var shortcutEntries: [ShortcutEntry] {
+        [
+            ShortcutEntry(name: "Dictate", keys: hotkeyKeycaps(),
+                          subtitle: "hold and speak", enabled: true),
+            ShortcutEntry(name: "Hands-free", keys: hotkeyKeycaps() + ["2×"],
+                          subtitle: "double-tap to toggle", enabled: true),
+            ShortcutEntry(name: "Talk", keys: ["⌃", "⌥"],
+                          subtitle: "coming soon", enabled: false),
+            ShortcutEntry(name: "Text", keys: ["⌃", "2×"],
+                          subtitle: "coming soon", enabled: false),
+        ]
     }
 
     private var homeView: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button(action: { navigate(to: .insights) }) {
-                        statCard(title: "words today", value: wordsTodayText)
-                    }
-                    .buttonStyle(.plain)
-                    statCard(title: "day streak", value: streakText)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("⌘ Shortcuts")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.gray)
-                    shortcutRow(name: "Dictate", keys: HotkeyString.current)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text("⌘ Shortcuts")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.gray)
+                .padding(.leading, 4)
 
             VStack(spacing: 0) {
-                navRow(icon: "clock.arrow.circlepath", title: "History", page: .history)
-                rowDivider
-                navRow(icon: "character.book.closed", title: "Dictionary", page: .dictionary)
-                rowDivider
-                navRow(icon: "scissors", title: "Snippets", page: .snippets)
+                ForEach(Array(shortcutEntries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { rowDivider }
+                    shortcutEntryRow(entry)
+                }
             }
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -218,6 +256,39 @@ struct NudgeMenuView: View {
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 16)
+    }
+
+    private func shortcutEntryRow(_ entry: ShortcutEntry) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(entry.enabled ? .white : Color(red: 0.5, green: 0.5, blue: 0.52))
+                if let subtitle = entry.subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+                }
+            }
+            Spacer()
+            HStack(spacing: 4) {
+                ForEach(entry.keys, id: \.self) { key in
+                    Text(key)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(entry.enabled
+                                         ? .white
+                                         : Color(red: 0.45, green: 0.45, blue: 0.45))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color(red: 0.20, green: 0.20, blue: 0.22))
+                        )
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
     private func navRow(icon: String, title: String, page target: NudgePage) -> some View {
@@ -242,46 +313,41 @@ struct NudgeMenuView: View {
         .buttonStyle(.plain)
     }
 
-    private func statCard(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.gray)
+    private var streakText: String {
+        let calendar = Calendar.current
+        let uniqueDays = Set(history.records.map {
+            calendar.startOfDay(for: $0.timestamp)
+        }).sorted(by: >)
+        var streak = 0
+        var currentDate = calendar.startOfDay(for: Date())
+        for day in uniqueDays {
+            if day == currentDate {
+                streak += 1
+                currentDate = calendar.date(byAdding: .day, value: -1, to: currentDate)!
+            } else if day == calendar.date(byAdding: .day, value: -1, to: currentDate)! {
+                streak += 1
+                currentDate = day
+            } else {
+                break
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minWidth: 130, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
-        )
+        return "\(streak)"
     }
 
-    private func shortcutRow(name: String, keys: String) -> some View {
-        HStack(spacing: 6) {
-            Text(name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
-            Spacer()
-            Text(keys)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(red: 0.22, green: 0.22, blue: 0.24))
-                )
+    // MARK: - Agents (placeholder — wired in Task 2)
+
+    private var agentsPlaceholderView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.32))
+            Text("Agents coming soon")
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(red: 0.14, green: 0.14, blue: 0.16))
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 50)
+        .padding(.horizontal, 18)
     }
 
     // MARK: - Sub-pages (filled in Tasks 2–3)
