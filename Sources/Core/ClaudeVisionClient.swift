@@ -19,6 +19,9 @@ enum ClaudeError: LocalizedError {
     case missingKey
     case http(Int, String)
     case network(Error)
+    /// The user held the hotkey but said nothing.
+    case noSpeech
+    /// Claude returned a 200 with no text in it.
     case empty
 
     /// Longest server text we'll splice into a user-facing string. The stream
@@ -42,6 +45,8 @@ enum ClaudeError: LocalizedError {
             return "claude returned an error (\(status)): \(shown)"
         case .network(let error):
             return "couldn't reach claude: \(error.localizedDescription)"
+        case .noSpeech:
+            return "i didn't catch that"
         case .empty:
             return "claude didn't say anything"
         }
@@ -137,16 +142,19 @@ final class ClaudeVisionClient {
              croppedRegion: Data?,
              onChunk: @escaping (String) -> Void) async throws -> String {
 
+        // Missing key first: it's the actionable failure. A user with no key
+        // who fumbles the hotkey must be told to add the key, not that we
+        // didn't catch what they said.
+        guard let apiKey = KeychainStore.get(.anthropic) else {
+            throw ClaudeError.missingKey
+        }
+
         // An empty transcript is an ordinary outcome — hotkey held and released
         // without speaking. The API rejects empty text blocks with a 400, so
         // catch it here rather than showing the user raw error JSON. Task 7
         // guards this too; the client must not rely on its caller for this.
         let question = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty else { throw ClaudeError.empty }
-
-        guard let apiKey = KeychainStore.get(.anthropic) else {
-            throw ClaudeError.missingKey
-        }
+        guard !question.isEmpty else { throw ClaudeError.noSpeech }
 
         expireStaleHistory()
 

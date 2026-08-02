@@ -15,6 +15,11 @@ final class NudgeMenuController {
 
     private(set) var isOpen = false
     private var menuPanel: KeyableMenuPanel?
+
+    /// The menu panel, for excluding Hush's own windows from screen capture
+    /// (TalkSession's hushWindows). Read-only.
+    var panelWindows: [NSWindow] { menuPanel.map { [$0] } ?? [] }
+
     private var clickOutsideMonitor: Any?
     private var localClickMonitor: Any?
     private weak var appState: AppState?

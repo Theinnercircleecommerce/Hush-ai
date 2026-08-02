@@ -9,6 +9,10 @@ final class NotchNudgeController {
     private var panels: [NSPanel] = []
     private weak var appState: AppState?
 
+    /// The nudge panels, for excluding Hush's own windows from screen capture
+    /// (TalkSession's hushWindows). Read-only.
+    var panelWindows: [NSWindow] { panels }
+
     private init() {
         NotificationCenter.default.addObserver(
             self,

@@ -111,6 +111,10 @@ struct NudgeView: View {
             Text("Thinking")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white)
+        case .speaking:
+            Text("Speaking")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
         case .error(let message):
             Text(message)
                 .font(.system(size: 11, weight: .medium))
@@ -128,6 +132,8 @@ struct NudgeView: View {
             NudgeBarsView(level: appState.audioLevel, color: Self.listeningTeal)
         case .transcribing:
             NudgePulseDotsView(color: Self.thinkingPurple)
+        case .speaking:
+            NudgePulseDotsView(color: Color(red: 1.0, green: 0.72, blue: 0.30))
         case .error:
             NudgePulseDotsView(color: Color(red: 1.0, green: 0.42, blue: 0.42))
         case .idle:

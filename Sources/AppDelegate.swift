@@ -24,13 +24,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Show the idle pill HUD persistently right away!
         NotchNudgeController.shared.show(appState: self.appState)
 
-        // Temporary wiring for talk hotkey monitor: hold ⌃⌥ → circle overlay.
+        // Circle-to-ask: hold ⌃⌥, circle a region, speak, hear the answer.
+        // Both callbacks are delivered on the main queue by the monitor.
+        TalkSession.shared.attach(appState: self.appState)
         TalkHotkeyMonitor.shared.onPress = {
-            CircleOverlayController.shared.begin()
+            MainActor.assumeIsolated { TalkSession.shared.begin() }
         }
         TalkHotkeyMonitor.shared.onRelease = {
-            let rect = CircleOverlayController.shared.end()
-            TalkHotkeyMonitor.diag("release circle=\(rect.map { NSStringFromRect($0) } ?? "nil")")
+            MainActor.assumeIsolated { TalkSession.shared.end() }
         }
         TalkHotkeyMonitor.shared.start()
 
