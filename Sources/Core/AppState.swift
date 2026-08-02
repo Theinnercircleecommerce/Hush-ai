@@ -52,10 +52,14 @@ class AppState: ObservableObject {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
         if status == .authorized {
             do {
-                try audioService.startRecording()
+                // Play the start sound BEFORE opening the mic: opening the
+                // input device reconfigures the audio route (drops Bluetooth
+                // headphones into call mode), which mangles a sound that is
+                // still playing. It also keeps the bloop out of the recording.
                 if AppSettings.shared.startSound != "None" {
                     NSSound(named: AppSettings.shared.startSound)?.play()
                 }
+                try audioService.startRecording()
                 self.hudState = .recording
             } catch {
                 self.hudState = .error("Failed to start recording")
