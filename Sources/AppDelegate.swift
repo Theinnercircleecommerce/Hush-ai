@@ -27,7 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Open onboarding if not completed, otherwise launch silently in the menu bar!
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if !AppSettings.shared.hasCompletedOnboarding {
-                NotificationCenter.default.post(name: Notification.Name("OpenDashboard"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("OpenOnboarding"), object: nil)
             }
         }
         
@@ -98,9 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            NotificationCenter.default.post(name: Notification.Name("OpenDashboard"), object: nil)
-        }
+        // No dashboard to reopen — the notch panel is the only UI.
         return true
     }
 }

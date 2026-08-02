@@ -11,7 +11,7 @@ struct HotkeyString {
 }
 
 enum NudgePage: Equatable {
-    case home, settings, history, dictionary, snippets, insights
+    case home, settings, history, dictionary, snippets, insights, scratchpad
 
     var title: String {
         switch self {
@@ -21,6 +21,7 @@ enum NudgePage: Equatable {
         case .dictionary: return "Dictionary"
         case .snippets: return "Snippets"
         case .insights: return "Insights"
+        case .scratchpad: return "Scratchpad"
         }
     }
 
@@ -55,6 +56,7 @@ struct NudgeMenuView: View {
                 pageLayer(dictionaryView, for: .dictionary)
                 pageLayer(snippetsView, for: .snippets)
                 pageLayer(insightsView, for: .insights)
+                pageLayer(scratchpadView, for: .scratchpad)
             }
             .animation(.easeOut(duration: 0.18), value: page)
         }
@@ -92,7 +94,8 @@ struct NudgeMenuView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Button(action: { navigate(to: .home) }) {
+                // Scratchpad is entered from Settings, so back returns there.
+                Button(action: { navigate(to: page == .scratchpad ? .settings : .home) }) {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 12, weight: .semibold))
@@ -642,6 +645,27 @@ struct NudgeMenuView: View {
         newReplacement = ""
     }
 
+    private var scratchpadView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Quick notes. Saved automatically as you type.")
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+                .padding(.horizontal, 4)
+            TextEditor(text: $settings.scratchpadText)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                )
+                .colorScheme(.dark)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
     private func emptyState(icon: String, text: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
@@ -802,6 +826,20 @@ struct NudgeMenuView: View {
                             .colorScheme(.dark)
                         }
                     }
+                }
+
+                // NOTES
+                settingsSection(title: "NOTES") {
+                    Button(action: { navigate(to: .scratchpad) }) {
+                        settingsRow(icon: "note.text", title: "Scratchpad",
+                                    subtitle: "Quick notes, saved automatically.") {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 12))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 // SUPPORT
