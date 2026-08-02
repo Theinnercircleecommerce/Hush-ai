@@ -35,12 +35,12 @@
   remove any external calls to it (`grep -rn "rebuildCatchers" Sources/`).
 - Classes `HoverCatcherPanel` and `HoverTrackerView` are deleted entirely.
 
-- [ ] **Step 1: Delete the catcher machinery**
+- [x] **Step 1: Delete the catcher machinery**
 
 In `Sources/UI/NudgeMenuController.swift` remove: the `catchers` property,
 `rebuildCatchers()`, class `HoverCatcherPanel`, class `HoverTrackerView`.
 
-- [ ] **Step 2: Add the poll**
+- [x] **Step 2: Add the poll**
 
 Replace `attach(appState:)` and add the timer logic:
 
@@ -112,12 +112,12 @@ Replace `attach(appState:)` and add the timer logic:
 
 Keep the click-outside monitor as a backup close path (unchanged).
 
-- [ ] **Step 3: Compile**
+- [x] **Step 3: Compile**
 
 Run: `swift build 2>&1 | tail -3` → `Build complete!`
 (`grep -rn "rebuildCatchers\|HoverCatcherPanel" Sources/` must return nothing.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuController.swift
@@ -132,7 +132,7 @@ git commit -m "fix: poll-based notch hover — opens over physical notch, auto-c
 - Modify: `Sources/UI/NudgeMenuController.swift` (`open`, `close`)
 - Modify: `Sources/UI/NudgeMenuView.swift:30-33` (background shape)
 
-- [ ] **Step 1: Animate the frame instead of fading**
+- [x] **Step 1: Animate the frame instead of fading**
 
 In `open(on:)`, replace the setFrame + alpha animation block (everything
 from `let metrics = ...` through the `NSAnimationContext` group) with:
@@ -172,7 +172,7 @@ In `close()`, replace the alpha fade with the reverse: animate
 `panel.close()`), duration 0.22, then `panel.close()` in the completion
 handler.
 
-- [ ] **Step 2: Flush top shape**
+- [x] **Step 2: Flush top shape**
 
 In `Sources/UI/NudgeMenuView.swift` (currently lines 30–33), replace:
 
@@ -201,7 +201,7 @@ the shape: after the `.background(...)`, add
         .clipShape(NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24))
 ```
 
-- [ ] **Step 3: Build, relaunch, verify with the user**
+- [x] **Step 3: Build, relaunch, verify with the user**
 
 `pkill -x Hush; ./build.sh && open Hush.app`, then ask the user to check:
 1. Hover anywhere on the notch (including dead center) → panel GROWS out
@@ -213,7 +213,7 @@ the shape: after the `.background(...)`, add
 5. External monitor: hover the pill zone → same behavior.
 6. Nudge geometry log still clean (DO-NOT-REGRESS check).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuController.swift Sources/UI/NudgeMenuView.swift

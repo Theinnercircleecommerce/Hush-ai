@@ -56,7 +56,7 @@
 - Produces (private): `HoverCatcherPanel`, `KeyableMenuPanel`.
 - Consumes: `NotchMetrics`, `NudgeLayout` (existing, Task-1 of Phase 1).
 
-- [ ] **Step 1: Create the controller with catcher + placeholder panel**
+- [x] **Step 1: Create the controller with catcher + placeholder panel**
 
 ```swift
 import Cocoa
@@ -279,7 +279,7 @@ final class KeyableMenuPanel: NSPanel {
 }
 ```
 
-- [ ] **Step 2: Placeholder menu view so Task 1 compiles standalone**
+- [x] **Step 2: Placeholder menu view so Task 1 compiles standalone**
 
 Append to the SAME file (Task 2 moves it to its own file and replaces the
 body):
@@ -297,7 +297,7 @@ struct NudgeMenuView: View {
 }
 ```
 
-- [ ] **Step 3: Wire into the app**
+- [x] **Step 3: Wire into the app**
 
 In `Sources/UI/NotchNudgeController.swift`, at the END of
 `rebuildPanels()` (after the screen loop — do not touch the loop body),
@@ -309,7 +309,7 @@ add:
 
 (`attach` re-runs `rebuildCatchers()`, so screen changes rebuild both.)
 
-- [ ] **Step 4: Compile and hand-test**
+- [x] **Step 4: Compile and hand-test**
 
 Run: `swift build 2>&1 | tail -3` → `Build complete!`
 Run: `pkill -x Hush; ./build.sh && open Hush.app`
@@ -318,7 +318,7 @@ click anywhere outside → it fades away; start dictating → hover does
 NOT open it. Also verify the nudge itself still looks/behaves exactly
 as before (geometry log check per DO-NOT-REGRESS).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuController.swift Sources/UI/NotchNudgeController.swift
@@ -344,7 +344,7 @@ git commit -m "feat: hover catcher opens menu panel skeleton from the notch"
 - Produces: `struct NudgeMenuView: View { init(appState:onClose:) }` with
   `enum NudgeMenuTab { case home, settings }` internal state.
 
-- [ ] **Step 1: Build the two-view scaffold + Home content**
+- [x] **Step 1: Build the two-view scaffold + Home content**
 
 `NudgeMenuView` structure (complete the row styling to match the user's
 HeyClicky screenshots — dark #0d0d0d background, 24pt corner radius,
@@ -456,11 +456,11 @@ small rounded keycap style like the screenshots), and `wordsTodayText` /
 a `// moved to NudgeMenuView.swift` free `FullSettingsView` compiling by
 removing its copy.
 
-- [ ] **Step 2: Compile, relaunch, hand-test with the user** (hover →
+- [x] **Step 2: Compile, relaunch, hand-test with the user** (hover →
   Home shows real stats and hotkey; gear → grows to empty settings and
   back; Open Dashboard button opens the dashboard and closes the panel).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuView.swift Sources/UI/NudgeMenuController.swift Sources/UI/FullSettingsView.swift
@@ -482,7 +482,7 @@ git commit -m "feat: notch menu Home view with stats, shortcuts, dashboard butto
   `grep -n "checkForUpdates" Sources/` — and call the same method).
 - Produces: `settingsView` body used by Task 2's scaffold.
 
-- [ ] **Step 1: Build the sectioned settings list**
+- [x] **Step 1: Build the sectioned settings list**
 
 `settingsView` = `ScrollView` of sections in this order (styling: gray
 uppercase 11pt section captions, rows as rounded dark cards — match the
@@ -510,11 +510,11 @@ Write complete row helper views (`settingsSection(title:content:)`,
 `settingsRow(icon:title:subtitle:trailing:)`) — every row must be real
 working controls bound to `settings`, not placeholders.
 
-- [ ] **Step 2: Compile, relaunch, hand-test with the user** — flip every
+- [x] **Step 2: Compile, relaunch, hand-test with the user** — flip every
   toggle/picker in the notch panel, then confirm the change is live
   (e.g. switch stop sound and dictate; toggle dock icon).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuView.swift
@@ -538,7 +538,7 @@ git commit -m "feat: full settings sections inside the notch panel"
 - Consumes: `AppSettings.shared.selectedMicrophoneID` (already exists,
   currently unused).
 
-- [ ] **Step 1: Device discovery + engine wiring in AudioCaptureService**
+- [x] **Step 1: Device discovery + engine wiring in AudioCaptureService**
 
 ```swift
 import AVFoundation
@@ -603,18 +603,18 @@ Then read `AudioCaptureService.swift` and call
 before `engine.inputNode` format/tap setup. Empty
 `selectedMicrophoneID` = system default (no call).
 
-- [ ] **Step 2: Replace the MICROPHONE row with a working picker**
+- [x] **Step 2: Replace the MICROPHONE row with a working picker**
 
 `Picker` bound to `settings.selectedMicrophoneID`, options: "System
 default" (tag `""`) + `AudioCaptureService.availableMicrophones()`
 (tag = `id`, label = `name`), refreshed `.onAppear`. Show the selected
 device's name in the row like HeyClicky's "AirPods Max".
 
-- [ ] **Step 3: Compile, relaunch, hand-test with the user** — pick a
+- [x] **Step 3: Compile, relaunch, hand-test with the user** — pick a
   non-default mic (e.g. AirPods), dictate, confirm audio came from it;
   switch back to System default and dictate again.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Sources/Core/AudioCaptureService.swift Sources/UI/NudgeMenuView.swift
@@ -635,26 +635,26 @@ git commit -m "feat: working microphone picker wired through CoreAudio"
 
 **Steps:**
 
-- [ ] **Step 1: ASK THE USER for permission to delete
+- [x] **Step 1: ASK THE USER for permission to delete
   `FullSettingsView.swift`** (his global rule). Confirm `HotkeyString` and
   any picker option lists were already moved into `NudgeMenuView.swift`
   (Tasks 2–3) — `grep -n "HotkeyString\|FullSettingsView" Sources/` must
   show no remaining references outside the file itself.
 
-- [ ] **Step 2: Remove sidebar entry + switch arm + deep-link** (files/
+- [x] **Step 2: Remove sidebar entry + switch arm + deep-link** (files/
   lines above; keep all other sidebar items).
 
-- [ ] **Step 3: Delete the file**
+- [x] **Step 3: Delete the file**
 
 ```bash
 git rm Sources/UI/FullSettingsView.swift
 ```
 
-- [ ] **Step 4: Build, relaunch, hand-test** — dashboard shows no Settings
+- [x] **Step 4: Build, relaunch, hand-test** — dashboard shows no Settings
   item; onboarding completion still lands somewhere sane; notch panel is
   now the only settings surface.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A Sources/
@@ -665,14 +665,14 @@ git commit -m "refactor: notch panel replaces dashboard settings tab"
 
 ### Task 6: QA pass with the user
 
-- [ ] **Step 1: Run the spec's manual test list** — hover open/close feel
+- [x] **Step 1: Run the spec's manual test list** — hover open/close feel
   vs HeyClicky, gear switch animation, every row functional, mic switch
   verified by dictation, click-outside dismissal, no focus stealing while
   typing elsewhere (type in another app with panel open), dictation
   auto-close, external monitor hover-over-pill, nudge geometry log still
   clean.
-- [ ] **Step 2: Fix reported nits, rebuild, re-check.**
-- [ ] **Step 3: Final commit**
+- [x] **Step 2: Fix reported nits, rebuild, re-check.**
+- [x] **Step 3: Final commit**
 
 ```bash
 git add -A

@@ -48,7 +48,7 @@ symptom.
 **Files:**
 - Modify: `Sources/UI/NudgeMenuController.swift`
 
-- [ ] **Step 1: Generation-guard the close completion**
+- [x] **Step 1: Generation-guard the close completion**
 
 Add a counter property:
 
@@ -87,7 +87,7 @@ and make sure `open` always does `panel.alphaValue = 1` and
 `panel.orderFront(nil)` before its grow animation (so a mid-close reopen
 recovers no matter what state the panel was left in).
 
-- [ ] **Step 2: Belt-and-suspenders desync recovery in the poll**
+- [x] **Step 2: Belt-and-suspenders desync recovery in the poll**
 
 In `hoverTick()`'s `!isOpen` branch, opening is already the action — no
 change. Add to the TOP of `hoverTick()`:
@@ -102,7 +102,7 @@ change. Add to the TOP of `hoverTick()`:
         }
 ```
 
-- [ ] **Step 3: Verify the exact failure choreography**
+- [x] **Step 3: Verify the exact failure choreography**
 
 Build + relaunch. Torture test with the user: rapidly hover in → out →
 in (re-entering DURING the shrink animation) 10+ times on the notch, then
@@ -110,7 +110,7 @@ in (re-entering DURING the shrink animation) 10+ times on the notch, then
 Then the normal sweep: mouse-out closes after ~0.4s, click-outside closes,
 dictation closes.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuController.swift
@@ -133,18 +133,18 @@ git commit -m "fix: hover always opens — close-animation race could strand the
   (settingsSize stays for Settings; Home stays homeSize). `resize(to:)`
   is already generic — no controller logic changes.
 
-- [ ] **Step 1:** Replace `NudgeMenuTab` with `NudgePage`. The mounted
+- [x] **Step 1:** Replace `NudgeMenuTab` with `NudgePage`. The mounted
   ZStack grows to all six pages, each `.opacity(page == .x ? 1 : 0)` +
   `.allowsHitTesting(page == .x)`, animated on `page`. Switching pages
   calls `NudgeMenuController.shared.resize(to:)` with the right size
   (home → homeSize, settings → settingsSize, others → subpageSize).
   The "NudgeMenuWillOpen" reset sets `page = .home`.
-- [ ] **Step 2:** Home view: below the stats/shortcuts block, add three
+- [x] **Step 2:** Home view: below the stats/shortcuts block, add three
   navigation rows in the settings-row card style — "History", "Dictionary",
   "Snippets" with chevrons → `page = .history` etc. Make the "words today"
   stat card tappable → `page = .insights`. REMOVE the "Open Dashboard"
   button.
-- [ ] **Step 3:** Compile (`swift build`), pages can be empty
+- [x] **Step 3:** Compile (`swift build`), pages can be empty
   placeholders EXCEPT wired navigation must work. Commit:
   `git commit -m "feat: page navigation in notch panel, dashboard rows on Home"`.
 
@@ -158,18 +158,18 @@ git commit -m "fix: hover always opens — close-animation race could strand the
   `Sources/UI/HomeDashboardView.swift`, `Sources/UI/InsightsView.swift`
   (mirror their exact store calls; do not invent APIs).
 
-- [ ] **Step 1: History page** — ScrollView list of recent transcriptions
+- [x] **Step 1: History page** — ScrollView list of recent transcriptions
   grouped by day (today / yesterday / date), each row: cleaned text
   (2-line limit, 12pt), time + word count caption, right-aligned copy
   button (`NSPasteboard` general, `setString`) and a small ✕ delete button
   calling the store's existing delete API. "Clear all" row at the bottom
   (red, with a confirmation alert). Limit initial load to the store's
   existing query APIs — no schema changes.
-- [ ] **Step 2: Insights page** — compact: 4 stat cards (total words, avg
+- [x] **Step 2: Insights page** — compact: 4 stat cards (total words, avg
   WPM, streak, most-active hour) + a 14-day bar chart drawn with plain
   SwiftUI `Capsule`s (no new dependencies) — data via the same calls
   `InsightsView.swift` uses.
-- [ ] **Step 3:** Build, relaunch, hand-test with the user (dictate, open
+- [x] **Step 3:** Build, relaunch, hand-test with the user (dictate, open
   History, copy a row, delete a row). Commit:
   `git commit -m "feat: history and insights sub-pages in notch panel"`.
 
@@ -182,13 +182,13 @@ git commit -m "fix: hover always opens — close-animation race could strand the
 - Read first: `Sources/UI/DictionaryView.swift`, `Sources/UI/SnippetsView.swift`
   (reuse their backing store/persistence exactly — only the UI shell changes).
 
-- [ ] **Step 1: Dictionary page** — add-word field (TextField + plus
+- [x] **Step 1: Dictionary page** — add-word field (TextField + plus
   button; the panel is key-capable so typing works), scrollable chip/row
   list of words, ✕ per row. Same persistence as `DictionaryView`.
-- [ ] **Step 2: Snippets page** — two-field add row (trigger →
+- [x] **Step 2: Snippets page** — two-field add row (trigger →
   replacement), list of existing pairs, ✕ per row. Same persistence as
   `SnippetsView`.
-- [ ] **Step 3:** Build, relaunch, hand-test (add a dictionary word,
+- [x] **Step 3:** Build, relaunch, hand-test (add a dictionary word,
   dictate it, confirm the hint works; add a snippet, dictate its trigger).
   Commit: `git commit -m "feat: dictionary and snippets sub-pages in notch panel"`.
 
@@ -208,33 +208,33 @@ git commit -m "fix: hover always opens — close-animation race could strand the
 - `grep -rn "OpenDashboard\|MainDashboardView\|selectedSidebarItem" Sources/`
   must end up empty outside deleted files.
 
-- [ ] **Step 1: ASK THE USER** — permission to delete these files
+- [x] **Step 1: ASK THE USER** — permission to delete these files
   (recoverable via git): `Sources/UI/MainDashboardView.swift`,
   `Sources/UI/HomeDashboardView.swift`, `Sources/UI/InsightsView.swift`,
   `Sources/UI/DictionaryView.swift`, `Sources/UI/SnippetsView.swift`,
   `Sources/UI/ScratchpadView.swift`. Confirm Scratchpad feature removal
   explicitly (its `scratchpadText` setting stays in UserDefaults,
   harmless). Do not proceed without a yes.
-- [ ] **Step 2:** Strip the scenes/menu plumbing per above; `git rm` the
+- [x] **Step 2:** Strip the scenes/menu plumbing per above; `git rm` the
   six files; remove now-orphaned references (`swift build` errors are the
   checklist).
-- [ ] **Step 3:** Build, relaunch. Verify: no dashboard opens from
+- [x] **Step 3:** Build, relaunch. Verify: no dashboard opens from
   anywhere; menu bar icon still shows its menu; onboarding still opens on
   a fresh-defaults run
   (`defaults delete com.hush.app hasCompletedOnboarding` then relaunch —
   ASK the user before touching his defaults, or just have him confirm
   onboarding visually another way).
-- [ ] **Step 4:** Commit:
+- [x] **Step 4:** Commit:
   `git commit -m "refactor: dashboard removed — notch panel is Hush's only UI"`.
 
 ---
 
 ### Task 5: QA with the user
 
-- [ ] Full sweep: rapid hover in/out torture test on notch AND pill (Task
+- [x] Full sweep: rapid hover in/out torture test on notch AND pill (Task
   0 regression — must open every time), first-hover smoothness, all six
   pages navigate and function, back buttons, reopen lands on Home,
   dictation auto-close, click-outside, geometry log clean, menu-bar icon
   menu intact, Sparkle update check reachable from Settings page.
-- [ ] Fix nits, rebuild, re-check, final commit:
+- [x] Fix nits, rebuild, re-check, final commit:
   `git commit -m "polish: notch-only UI QA fixes"`.

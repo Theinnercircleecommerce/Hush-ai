@@ -32,7 +32,7 @@
 **Interfaces:** `attach(appState:)`, `open(on:)`, `close()`, `resize(to:)`
 keep their signatures. New private: `func makePanel(appState: AppState)`.
 
-- [ ] **Step 1: Build the panel once in `attach`**
+- [x] **Step 1: Build the panel once in `attach`**
 
 Add a `makePanel` and call it from `attach` (panel created before first
 hover, never recreated):
@@ -73,7 +73,7 @@ hover, never recreated):
     }
 ```
 
-- [ ] **Step 2: `open` repositions instead of creating**
+- [x] **Step 2: `open` repositions instead of creating**
 
 In `open(on:)`: delete the panel/hosting creation lines (`let panel =
 KeyableMenuPanel()` through `panel.contentView = hosting` and the later
@@ -93,7 +93,7 @@ notification so the view opens on Home:
     }
 ```
 
-- [ ] **Step 3: Flush top on notchless displays**
+- [x] **Step 3: Flush top on notchless displays**
 
 Everywhere `topY` is computed (in `open` and `resize`), replace
 
@@ -109,7 +109,7 @@ with
 
 (The `metrics` local stays — it is still used for the shelf start-frame.)
 
-- [ ] **Step 4: `close` hides instead of destroying**
+- [x] **Step 4: `close` hides instead of destroying**
 
 In `close()`, the animation completion handler currently calls
 `panel.close()` and `menuPanel = nil`. Change to keep the panel alive:
@@ -123,7 +123,7 @@ In `close()`, the animation completion handler currently calls
 
 Also verify nothing else nils `menuPanel` (`grep -n "menuPanel = nil" Sources/UI/NudgeMenuController.swift` → only inside removed code).
 
-- [ ] **Step 5: Compile + commit**
+- [x] **Step 5: Compile + commit**
 
 `swift build 2>&1 | tail -3` → `Build complete!`
 
@@ -139,7 +139,7 @@ git commit -m "perf: persistent pre-warmed menu panel; flush top on external"
 **Files:**
 - Modify: `Sources/UI/NudgeMenuView.swift`
 
-- [ ] **Step 1: Replace the tab `switch` with an opacity flip**
+- [x] **Step 1: Replace the tab `switch` with an opacity flip**
 
 In `body`, the current tab area is a `switch tab { case .home: homeView; case .settings: settingsView }`. Replace with both mounted (settings pre-built → first gear press is instant):
 
@@ -155,7 +155,7 @@ In `body`, the current tab area is a `switch tab { case .home: homeView; case .s
             .animation(.easeOut(duration: 0.18), value: tab)
 ```
 
-- [ ] **Step 2: Reset to Home whenever the panel reopens**
+- [x] **Step 2: Reset to Home whenever the panel reopens**
 
 Add to the outermost view in `body`:
 
@@ -166,7 +166,7 @@ Add to the outermost view in `body`:
         }
 ```
 
-- [ ] **Step 3: Build, relaunch, verify with the user**
+- [x] **Step 3: Build, relaunch, verify with the user**
 
 `pkill -x Hush; ./build.sh && open Hush.app`, then have the user check
 IMMEDIATELY after launch (first interaction is the whole point):
@@ -177,7 +177,7 @@ IMMEDIATELY after launch (first interaction is the whole point):
 5. Regression sweep: hover-center open, mouse-out close, click-outside
    close, dictation auto-close, mic picker still works, geometry log clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Sources/UI/NudgeMenuView.swift
