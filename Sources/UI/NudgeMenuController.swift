@@ -291,10 +291,14 @@ final class NudgeMenuController {
 
 enum NudgeMenuLayout {
     /// Fixed window size — big enough for the largest page.
-    static let panelSize = CGSize(width: 510, height: 640)
-    static let homeSize = CGSize(width: 510, height: 232)
-    static let settingsSize = CGSize(width: 510, height: 640)
-    static let subpageSize = CGSize(width: 510, height: 560)
+    /// Width bumped to 580 so the Home/Agents tab group ends at ~164pt (left
+    /// edge of the 179pt notch occluded strip starts at ~200pt) and the gear
+    /// starts at ~548pt (right edge of strip ends at ~380pt). Both clear by
+    /// ≥36pt.
+    static let panelSize = CGSize(width: 580, height: 640)
+    static let homeSize = CGSize(width: 580, height: 248)
+    static let settingsSize = CGSize(width: 580, height: 640)
+    static let subpageSize = CGSize(width: 580, height: 560)
 }
 
 /// Non-activating but key-capable, so the shortcut recorder and text

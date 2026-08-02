@@ -154,15 +154,15 @@ struct NudgeMenuView: View {
     private func tabButton(label: String, icon: String, target: NudgePage) -> some View {
         let isSelected = page == target
         return Button(action: { navigate(to: target) }) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                 Text(label)
                     .font(.system(size: 13, weight: .semibold))
             }
             .foregroundColor(isSelected ? .white : Color(red: 0.5, green: 0.5, blue: 0.52))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isSelected
@@ -215,62 +215,161 @@ struct NudgeMenuView: View {
     }
 
     private var shortcutEntries: [ShortcutEntry] {
+        // Order matches the HeyClicky reference: Talk, Text, Dictate, Hands-free.
+        // Keys use word-style chips: symbol + word (e.g. "^ control") as separate
+        // strings that hotkeyKeycapView renders as a single chip each.
         [
-            ShortcutEntry(name: "Dictate", keys: hotkeyKeycaps(),
+            ShortcutEntry(name: "Talk",       keys: ["^ control", "⌥ option"],
+                          subtitle: nil, enabled: false),
+            ShortcutEntry(name: "Text",       keys: ["^ control", "2×"],
+                          subtitle: nil, enabled: false),
+            ShortcutEntry(name: "Dictate",    keys: ["fn", "^ control"],
                           subtitle: "hold and speak", enabled: true),
-            ShortcutEntry(name: "Hands-free", keys: hotkeyKeycaps() + ["2×"],
+            ShortcutEntry(name: "Hands-fre…", keys: ["fn", "^ control", "2×"],
                           subtitle: "double-tap to toggle", enabled: true),
-            ShortcutEntry(name: "Talk", keys: ["⌃", "⌥"],
-                          subtitle: "coming soon", enabled: false),
-            ShortcutEntry(name: "Text", keys: ["⌃", "2×"],
-                          subtitle: "coming soon", enabled: false),
         ]
     }
 
     private var homeView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("⌘ Shortcuts")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray)
-                .padding(.leading, 4)
+        VStack(spacing: 0) {
+            // ── Two-column body ──────────────────────────────────────────────
+            HStack(alignment: .top, spacing: 12) {
 
-            VStack(spacing: 0) {
-                ForEach(shortcutEntries) { entry in
-                    shortcutEntryRow(entry)
-                    if entry.id != shortcutEntries.last?.id { rowDivider }
+                // LEFT: Add skills
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Add skills")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Skills give Hush superpowers")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+
+                    // + button (52×52 rounded square, placeholder)
+                    Button(action: {}) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(Color(red: 0.70, green: 0.70, blue: 0.72))
+                            .frame(width: 52, height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(red: 0.18, green: 0.18, blue: 0.20))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // RIGHT: Shortcuts
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("⌘ Shortcuts")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.gray)
+
+                    VStack(spacing: 0) {
+                        ForEach(shortcutEntries) { entry in
+                            shortcutEntryRow(entry)
+                            if entry.id != shortcutEntries.last?.id {
+                                Divider()
+                                    .background(Color(red: 0.18, green: 0.18, blue: 0.20))
+                                    .padding(.leading, 8)
+                            }
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 10)
+
+            // ── Integrations bar ─────────────────────────────────────────────
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Integrations")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+                    .padding(.leading, 2)
+
+                HStack(spacing: 8) {
+                    // Wide input-style bar with small "+" at left
+                    HStack(spacing: 6) {
+                        Button(action: {}) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Color(red: 0.55, green: 0.55, blue: 0.58))
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(red: 0.12, green: 0.12, blue: 0.14))
+                    )
+
+                    // Undock Cursor pill — yellow accent (placeholder)
+                    Button(action: {}) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Undock Cursor")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(Color(red: 0.10, green: 0.10, blue: 0.10))
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color(red: 0.98, green: 0.80, blue: 0.10))
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    // Circular "i" button (placeholder)
+                    Button(action: {}) {
+                        Image(systemName: "info")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(red: 0.55, green: 0.55, blue: 0.58))
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle()
+                                    .fill(Color(red: 0.12, green: 0.12, blue: 0.14))
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
-            )
-
-            Spacer(minLength: 0)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 16)
     }
 
     private func shortcutEntryRow(_ entry: ShortcutEntry) -> some View {
         let dimmed = !entry.enabled
-        return HStack(spacing: 10) {
+        return HStack(spacing: 6) {
             Text(entry.name)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(dimmed
                                  ? Color(red: 0.38, green: 0.38, blue: 0.40)
                                  : Color(red: 0.72, green: 0.72, blue: 0.74))
-            Spacer()
-            HStack(spacing: 4) {
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            HStack(spacing: 3) {
                 ForEach(entry.keys, id: \.self) { key in
                     Text(key)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(dimmed
                                          ? Color(red: 0.32, green: 0.32, blue: 0.34)
                                          : Color(red: 0.80, green: 0.80, blue: 0.82))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
                         .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(dimmed
                                       ? Color(red: 0.14, green: 0.14, blue: 0.15)
                                       : Color(red: 0.20, green: 0.20, blue: 0.22))
@@ -278,8 +377,9 @@ struct NudgeMenuView: View {
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(minHeight: 24)
     }
 
     private func navRow(icon: String, title: String, page target: NudgePage) -> some View {
