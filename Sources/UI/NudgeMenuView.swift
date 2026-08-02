@@ -252,36 +252,34 @@ struct NudgeMenuView: View {
     }
 
     private func shortcutEntryRow(_ entry: ShortcutEntry) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(entry.enabled ? .white : Color(red: 0.5, green: 0.5, blue: 0.52))
-                if let subtitle = entry.subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
-                }
-            }
+        let dimmed = !entry.enabled
+        return HStack(spacing: 10) {
+            Text(entry.name)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(dimmed
+                                 ? Color(red: 0.38, green: 0.38, blue: 0.40)
+                                 : Color(red: 0.72, green: 0.72, blue: 0.74))
             Spacer()
             HStack(spacing: 4) {
                 ForEach(entry.keys, id: \.self) { key in
                     Text(key)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(entry.enabled
-                                         ? .white
-                                         : Color(red: 0.45, green: 0.45, blue: 0.45))
-                        .padding(.horizontal, 7)
+                        .foregroundColor(dimmed
+                                         ? Color(red: 0.32, green: 0.32, blue: 0.34)
+                                         : Color(red: 0.80, green: 0.80, blue: 0.82))
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color(red: 0.20, green: 0.20, blue: 0.22))
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(dimmed
+                                      ? Color(red: 0.14, green: 0.14, blue: 0.15)
+                                      : Color(red: 0.20, green: 0.20, blue: 0.22))
                         )
                 }
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.vertical, 6)
     }
 
     private func navRow(icon: String, title: String, page target: NudgePage) -> some View {
@@ -327,7 +325,7 @@ struct NudgeMenuView: View {
         return "\(streak)"
     }
 
-    // MARK: - Agents (placeholder — wired in Task 2)
+    // MARK: - Agents (placeholder)
 
     private var agentsPlaceholderView: some View {
         VStack(spacing: 10) {
@@ -343,11 +341,11 @@ struct NudgeMenuView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 50)
+        .padding(.vertical, 24)
         .padding(.horizontal, 18)
     }
 
-    // MARK: - Sub-pages (filled in Tasks 2–3)
+    // MARK: - Sub-pages
 
     /// Recent transcriptions bucketed into TODAY / YESTERDAY / date, newest
     /// first. `records` is already ordered timestamp-desc by the store.

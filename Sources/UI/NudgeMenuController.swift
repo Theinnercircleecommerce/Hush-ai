@@ -292,7 +292,7 @@ final class NudgeMenuController {
 enum NudgeMenuLayout {
     /// Fixed window size — big enough for the largest page.
     static let panelSize = CGSize(width: 510, height: 640)
-    static let homeSize = CGSize(width: 510, height: 380)
+    static let homeSize = CGSize(width: 510, height: 232)
     static let settingsSize = CGSize(width: 510, height: 640)
     static let subpageSize = CGSize(width: 510, height: 560)
 }
