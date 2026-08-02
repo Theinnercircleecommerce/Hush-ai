@@ -17,7 +17,7 @@ stored in Keychain), NO backend, voice audio NEVER leaves the Mac
 |---|---|---|
 | 1 | Notch nudge (idle shelf/pill, Listening/Thinking states) | ✅ SHIPPED |
 | 1.5 | Notch panel = entire UI (hover-open, Home/Agents tabs, settings, sub-pages; dashboard deleted) | ✅ SHIPPED |
-| 2 | Circle-to-ask: hold hotkey → circle screen region → ask aloud → Claude answers, spoken via OpenAI TTS | ⬅️ NEXT (spec+plan not yet written) |
+| 2 | Circle-to-ask: hold hotkey → circle screen region → ask aloud → Claude answers, spoken via OpenAI TTS | ✅ SHIPPED |
 | 3 | Text chat (double-tap ctrl): "ask Hush…" input with screen context; answer bubble near cursor (~340px, ~6s fade) | not started |
 | 4 | Cursor triangle companion (follows mouse, flies to [POINT:x,y:label] coords from Claude) | not started |
 | 5 | Agents (spawn local Claude Code CLI subprocess; Agents tab placeholder already in panel) | not started |
@@ -45,6 +45,76 @@ double-tap = hands-free (works today).
 - **Dashboard window: deleted.** Onboarding window remains.
 - Dictation pipeline untouched throughout: WhisperKit local STT, optional
   Ollama cleanup, paste via Cmd+V, SQLite history.
+
+## Phase 2 — Circle-to-ask (SHIPPED)
+
+Owner-confirmed working: hold `⌃⌥` → circle a screen region → speak → hear
+the answer. Written answer bubble is opt-in via a settings toggle
+(`AppSettings.showAnswerBubble`, default OFF — voice-only by default).
+
+**The full chain, component by component:**
+- `Sources/Core/TalkHotkeyMonitor.swift` — hold-to-talk detector for the
+  modifier-only `⌃⌥` combo. NSEvent global+local `.flagsChanged` monitors,
+  NOT a CGEvent tap → Input Monitoring permission is NOT required
+  (Accessibility trust alone delivers the events; verified empirically).
+  onPress/onRelease drive the session.
+- `Sources/UI/CircleOverlayController.swift` — one borderless transparent
+  panel per display, pre-warmed once and reused forever. `begin()` on press
+  samples the cursor at 60fps and draws the stroke; `end()` returns the
+  padded bounding box in global AppKit coords. Panels are click-through at
+  ALL times (drawing needs no mouse button — hold `⌃⌥` and move, like
+  HeyClicky); they only display ink, never capture input. Debounced
+  self-heal takes the overlay down if the paired release is ever lost.
+- `Sources/Core/AudioCaptureService.swift` — SHARED with dictation. Records
+  via a **fresh AVAudioEngine per press** (see invariant below).
+- `Sources/Core/LocalTranscriptionService.swift` — WhisperKit, **on-device**.
+  The spoken question NEVER leaves the Mac.
+- `Sources/Core/ScreenCaptureService.swift` — captures all displays
+  (excluding Hush's own windows) and crops to the circled region.
+- `Sources/Core/ClaudeVisionClient.swift` — streams the answer from Claude
+  (`claude-sonnet-4-6`, the single model constant), user's key from Keychain.
+- `Sources/Core/SpeechOutputService.swift` — OpenAI TTS, playback-only via
+  AVAudioPlayer (no engine/session/route APIs). Plays an ORDERED SEGMENT
+  QUEUE: `enqueue(_:)` sentence-sized segments, drained strictly in order,
+  back-to-back, with segment N+1 prefetched while segment N plays (gapless).
+  `isSpeaking`/`isActive` span first segment to queue drain; `stop()` clears
+  the queue + cancels the in-flight fetch + halts playback. 20s fetch timeout.
+- `Sources/Core/TalkSession.swift` — the orchestrator. Wires all the above.
+  Starts screen capture BEFORE transcription (overlaps + fresh screenshot),
+  skips the API on an empty transcript (no charge), and **speaks the first
+  sentence while the rest of the answer still streams** (sentence-pipelined
+  TTS) so time-to-first-word is one sentence + one TTS fetch, not the whole
+  answer + whole fetch. `@MainActor`; single re-entrancy guard (`isBusy`)
+  plus a lost-release watchdog.
+- `Sources/UI/AnswerBubbleController.swift` — cursor-adjacent streaming
+  answer bubble, shown only when `showAnswerBubble` is on.
+
+**Phase 2 invariants (do not regress):**
+- **API keys live in the Keychain ONLY** (`KeychainStore`), never on disk in
+  plaintext. Anthropic + OpenAI.
+- **STT stays local** (WhisperKit). The voice audio never leaves the Mac —
+  this privacy edge over Clicky is deliberate.
+- **Single model constant**: `claude-sonnet-4-6`. One place, no per-call
+  overrides.
+- **Overlay panels are pre-warmed and click-through-always.** Built once,
+  reused; they display ink only, never eat clicks.
+- **Fresh AVAudioEngine per press.** Engine reuse and Bluetooth-mic
+  avoidance were tried and BROKE recording (dead tap, 4KB files) and were
+  fully reverted in commit `896e82f`. **Do NOT retry** engine reuse, BT-mic
+  redirection, AVAudioSession/route changes, or AudioUnitUninitialize.
+- **Talk hotkey is NSEvent monitors, not a CGEvent tap** → Input Monitoring
+  is NOT required.
+- **Build signs with the Apple Development identity and syncs /Applications**
+  (`./build.sh`). Unified logging is invisible for this bundle, so Phase-2
+  diagnostics append to a temp file (`hush-talk.log`).
+- **Written answer is opt-in** via `AppSettings.showAnswerBubble` (default
+  off; voice-only).
+
+**Known deliberate gap: barge-in.** Pressing `⌃⌥` again while an answer is
+still being spoken does stop the current playback (`begin()` calls
+`SpeechOutputService.stop()` and clears the bubble), but there is no smooth
+"interrupt and immediately re-listen" flow beyond that hard stop. Left as a
+future refinement.
 
 ## Hard-won invariants — regressions here have burned us before
 

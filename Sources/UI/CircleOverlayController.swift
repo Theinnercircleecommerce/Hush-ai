@@ -42,8 +42,6 @@ final class CircleOverlayController {
     /// Consecutive ticks the talk modifiers have read as absent. Drives the
     /// debounced self-heal; reset by any tick that sees them held.
     private var modifiersAbsentTicks = 0
-    /// TEMP DIAGNOSTIC — remove with the TALK diag lines.
-    private var diagTickCount = 0
 
     /// Fewer points than this means the user held the hotkey without really
     /// drawing (a stray click, a twitch) — treat it as "no circle".
@@ -91,7 +89,6 @@ final class CircleOverlayController {
         globalPoints.removeAll()
         owningScreenFrame = nil
         modifiersAbsentTicks = 0
-        diagTickCount = 0
 
         syncPanels()
 
@@ -133,7 +130,6 @@ final class CircleOverlayController {
         TalkHotkeyMonitor.diag("overlay end(), points=\(globalPoints.count) rect=\(rect.map { NSStringFromRect($0) } ?? "nil")")
 
         for overlay in overlays.values {
-            overlay.contentView.isCapturing = false
             // Dormant again: clicks pass straight through to the app below.
             overlay.panel.ignoresMouseEvents = true
         }
@@ -203,14 +199,6 @@ final class CircleOverlayController {
 
     private func sampleTick() {
         guard isActive else { return }
-
-        // TEMP DIAGNOSTIC (remove with the other TALK diag lines): trace the
-        // first ticks of each session so the log shows which gate blocks.
-        diagTickCount += 1
-        if diagTickCount <= 10 {
-            let flags = NSEvent.modifierFlags
-            TalkHotkeyMonitor.diag("tick \(diagTickCount): ctrl=\(flags.contains(.control)) opt=\(flags.contains(.option)) button=\(NSEvent.pressedMouseButtons & 1) mouse=\(NSStringFromPoint(NSEvent.mouseLocation)) overlayHit=\(overlay(containing: NSEvent.mouseLocation) != nil) points=\(globalPoints.count)")
-        }
 
         // SELF-HEAL (debounced). While active, every display is covered by a
         // transparent panel that swallows clicks. If the paired onRelease is
@@ -300,7 +288,6 @@ final class CircleOverlayController {
         // surviving display where begin()'s loop makes it a second,
         // invisible click-eating surface.
         for (id, overlay) in overlays where !live.contains(id) {
-            overlay.contentView.isCapturing = false
             overlay.panel.ignoresMouseEvents = true
             // close(), not just orderOut(): orderOut leaves the window in the
             // application's window list, and isReleasedWhenClosed = false
@@ -365,19 +352,15 @@ private final class ScreenOverlay {
     }
 }
 
-/// The panel's content view. `ignoresMouseEvents = false` alone is not
-/// enough to stop a drag reaching the app underneath: if hit-testing returns
-/// nil AppKit keeps looking down the window list. So this view claims the
-/// hit while a session is active — and refuses it while dormant, which is
-/// belt-and-braces with `ignoresMouseEvents = true`. It handles no events;
-/// claiming the hit is the entire job.
+/// The panel's content view. Under the click-through-always decision (drawing
+/// needs no mouse button — hold ⌃⌥ and move the cursor), the overlay only ever
+/// displays ink and never captures input; `ignoresMouseEvents = true` on the
+/// panel already lets every click pass through. `hitTest` returns nil so that
+/// even if a session flipped `ignoresMouseEvents` in future, this view would
+/// still refuse the hit rather than swallow it.
 private final class OverlayContentView: NSView {
-    var isCapturing = false
-
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard isCapturing else { return nil }
-        let local = superview.map { convert(point, from: $0) } ?? point
-        return bounds.contains(local) ? self : nil
+        return nil
     }
 }
 

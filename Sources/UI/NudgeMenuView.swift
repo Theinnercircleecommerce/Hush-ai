@@ -219,8 +219,8 @@ struct NudgeMenuView: View {
         // Keys use word-style chips: symbol + word (e.g. "^ control") as separate
         // strings that hotkeyKeycapView renders as a single chip each.
         [
-            ShortcutEntry(name: "Talk",       keys: [],
-                          subtitle: nil, enabled: false),
+            ShortcutEntry(name: "Talk",       keys: ["⌃", "⌥"],
+                          subtitle: "hold and speak", enabled: true),
             ShortcutEntry(name: "Text",       keys: [],
                           subtitle: nil, enabled: false),
             ShortcutEntry(name: "Dictate",    keys: hotkeyKeycaps(),

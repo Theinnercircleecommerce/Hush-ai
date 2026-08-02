@@ -24,6 +24,9 @@ class AudioCaptureService: NSObject, ObservableObject {
     }
 
     func startRecording() throws {
+        guard !isRecording else {
+            throw NSError(domain: "AudioCaptureService", code: 1, userInfo: [NSLocalizedDescriptionKey: "already recording"])
+        }
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = UUID().uuidString + ".caf"
         let fileURL = tempDir.appendingPathComponent(fileName)

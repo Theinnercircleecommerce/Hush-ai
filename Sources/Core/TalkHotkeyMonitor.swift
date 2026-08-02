@@ -62,7 +62,6 @@ final class TalkHotkeyMonitor {
 
     private func handle(flags: NSEvent.ModifierFlags) {
         let held = flags.contains(.control) && flags.contains(.option)
-        Self.diag("flagsChanged held=\(held) isDown=\(isDown)")
         if held, !isDown {
             isDown = true
             DispatchQueue.main.async { [weak self] in self?.onPress?() }
