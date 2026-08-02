@@ -21,15 +21,25 @@ enum ClaudeError: LocalizedError {
     case network(Error)
     case empty
 
+    /// Longest server text we'll splice into a user-facing string. The stream
+    /// body is already capped at 8 KB on collection; this stops that 8 KB from
+    /// reaching a label.
+    private static let maxBodyInDescription = 300
+
     var errorDescription: String? {
         switch self {
         case .missingKey:
             return "add your anthropic api key in settings"
         case .http(let status, let body):
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty
-                ? "claude returned an error (\(status))"
-                : "claude returned an error (\(status)): \(trimmed)"
+            guard !trimmed.isEmpty else {
+                return "claude returned an error (\(status))"
+            }
+            let limit = ClaudeError.maxBodyInDescription
+            let shown = trimmed.count > limit
+                ? String(trimmed.prefix(limit)) + "…"
+                : trimmed
+            return "claude returned an error (\(status)): \(shown)"
         case .network(let error):
             return "couldn't reach claude: \(error.localizedDescription)"
         case .empty:
@@ -38,32 +48,28 @@ enum ClaudeError: LocalizedError {
     }
 }
 
-/// Asks Claude about the user's screen(s) and streams the spoken-style answer.
+/// Endpoint, model, and prompt constants.
 ///
-/// `@MainActor` isolated so `history` can never race: `ask` is async and will be
-/// driven from a `Task`, but every mutation of the conversation state happens on
-/// the main actor. It also means `onChunk` is always invoked on the main queue,
-/// which is what the UI in Task 8 needs.
-@MainActor
-final class ClaudeVisionClient {
-
-    static let shared = ClaudeVisionClient()
-
-    // MARK: - Configuration
-
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+/// Deliberately at file scope rather than inside the `@MainActor` class so the
+/// off-actor request builder can read them without hopping back to the main
+/// actor.
+private enum Claude {
+    static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     /// Chosen deliberately for latency. Do not swap this out or add a picker.
-    private static let model = "claude-sonnet-4-6"
-    private static let maxTokens = 1024
-    private static let apiVersion = "2023-06-01"
-    private static let timeout: TimeInterval = 20
+    static let model = "claude-sonnet-4-6"
+    static let maxTokens = 1024
+    static let apiVersion = "2023-06-01"
+    static let timeout: TimeInterval = 20
 
     /// Number of `(user, assistant)` turns kept for follow-up questions.
-    private static let maxHistoryExchanges = 10
+    static let maxHistoryExchanges = 10
     /// History older than this is stale — a new question isn't a follow-up.
-    private static let historyExpiry: TimeInterval = 600  // 10 minutes
+    static let historyExpiry: TimeInterval = 600  // 10 minutes
 
-    private let systemPrompt = """
+    /// Largest error body we'll buffer off a failed response.
+    static let maxErrorBodyBytes = 8192
+
+    static let systemPrompt = """
     you're hush, a friendly assistant that lives in the user's menu bar. the \
     user just spoke to you and you can see their screen(s). your reply will be \
     spoken aloud, so write the way you'd actually talk.
@@ -76,6 +82,18 @@ final class ClaudeVisionClient {
     - don't read code or errors out verbatim — describe what they mean.
     - if you can't see what they're asking about, say so briefly.
     """
+}
+
+/// Asks Claude about the user's screen(s) and streams the spoken-style answer.
+///
+/// `@MainActor` isolated so `history` can never race: `ask` is async and will be
+/// driven from a `Task`, but every mutation of the conversation state happens on
+/// the main actor. It also means `onChunk` is always invoked on the main queue,
+/// which is what the UI in Task 8 needs.
+@MainActor
+final class ClaudeVisionClient {
+
+    static let shared = ClaudeVisionClient()
 
     // MARK: - Conversation state
 
@@ -93,7 +111,7 @@ final class ClaudeVisionClient {
 
     private init() {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = ClaudeVisionClient.timeout
+        configuration.timeoutIntervalForRequest = Claude.timeout
         configuration.waitsForConnectivity = false
         session = URLSession(configuration: configuration)
     }
@@ -108,11 +126,23 @@ final class ClaudeVisionClient {
 
     /// Streams Claude's answer. `onChunk` fires on the main queue for every text
     /// delta; the full accumulated answer is returned when the stream ends.
+    ///
+    /// - Important: Not reentrant. Overlapping calls can't corrupt `history`
+    ///   (it's main-actor isolated and only written on success), but both would
+    ///   stream `onChunk` into the same UI and interleave the spoken answer —
+    ///   the caller must serialize asks.
     @discardableResult
     func ask(transcript: String,
              screens: [CapturedScreen],
              croppedRegion: Data?,
              onChunk: @escaping (String) -> Void) async throws -> String {
+
+        // An empty transcript is an ordinary outcome — hotkey held and released
+        // without speaking. The API rejects empty text blocks with a 400, so
+        // catch it here rather than showing the user raw error JSON. Task 7
+        // guards this too; the client must not rely on its caller for this.
+        let question = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else { throw ClaudeError.empty }
 
         guard let apiKey = KeychainStore.get(.anthropic) else {
             throw ClaudeError.missingKey
@@ -120,11 +150,19 @@ final class ClaudeVisionClient {
 
         expireStaleHistory()
 
-        let request = try makeRequest(
+        // Snapshot history so the request can be built off the main actor.
+        let priorTurns = history.map { ($0.user, $0.assistant) }
+
+        // Base64-encoding several screenshots and serializing a multi-megabyte
+        // JSON body are both expensive. `makeRequest` is a nonisolated async
+        // function, so awaiting it runs the work on the cooperative pool and
+        // keeps the main thread free while the overlay animates.
+        let request = try await makeRequest(
             apiKey: apiKey,
-            transcript: transcript,
+            transcript: question,
             screens: screens,
-            croppedRegion: croppedRegion
+            croppedRegion: croppedRegion,
+            priorTurns: priorTurns
         )
 
         let bytes: URLSession.AsyncBytes
@@ -145,11 +183,16 @@ final class ClaudeVisionClient {
             // `.lines` buffers across chunk boundaries, so a delta split mid-line
             // by the network is reassembled before we ever see it.
             for try await line in bytes.lines {
-                guard let text = textDelta(fromSSELine: line), !text.isEmpty else { continue }
+                // Throws on a mid-stream `error` event — a 200 response can still
+                // fail partway through, and we must not treat the partial text as
+                // a complete answer.
+                guard let text = try textDelta(fromSSELine: line), !text.isEmpty else { continue }
                 answer += text
                 // Already on the main actor, i.e. the main queue.
                 onChunk(text)
             }
+        } catch let error as ClaudeError {
+            throw error
         } catch {
             throw ClaudeError.network(error)
         }
@@ -157,7 +200,7 @@ final class ClaudeVisionClient {
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ClaudeError.empty }
 
-        record(user: transcript, assistant: trimmed)
+        record(user: question, assistant: trimmed)
         return trimmed
     }
 
@@ -171,7 +214,12 @@ final class ClaudeVisionClient {
     /// `data: [DONE]` sentinel, non-JSON payloads, and any event type we don't
     /// care about (`message_start`, `content_block_start`, `ping`,
     /// `message_delta`, `message_stop`).
-    private func textDelta(fromSSELine line: String) -> String? {
+    ///
+    /// - Throws: `ClaudeError.http` when the stream carries an `error` event.
+    ///   The API can fail *after* a 200 — overload, an inference error — and
+    ///   silently returning the partial text would speak half a sentence and
+    ///   then record that fragment as a completed turn.
+    private nonisolated func textDelta(fromSSELine line: String) throws -> String? {
         guard line.hasPrefix("data:") else { return nil }
 
         let payload = line.dropFirst("data:".count)
@@ -180,7 +228,19 @@ final class ClaudeVisionClient {
 
         guard let data = payload.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              object["type"] as? String == "content_block_delta",
+              let type = object["type"] as? String
+        else { return nil }
+
+        if type == "error" {
+            let error = object["error"] as? [String: Any]
+            let kind = error?["type"] as? String ?? "api_error"
+            let message = error?["message"] as? String ?? kind
+            // 529 is what an overload would have been had it arrived as a
+            // status code; anything else maps to a generic server error.
+            throw ClaudeError.http(kind == "overloaded_error" ? 529 : 500, message)
+        }
+
+        guard type == "content_block_delta",
               let delta = object["delta"] as? [String: Any],
               delta["type"] as? String == "text_delta"
         else { return nil }
@@ -190,12 +250,12 @@ final class ClaudeVisionClient {
 
     /// Drains a failed response's body for the error message. Capped so a
     /// pathological body can't be buffered forever.
-    private func collectErrorBody(from bytes: URLSession.AsyncBytes) async -> String {
+    private nonisolated func collectErrorBody(from bytes: URLSession.AsyncBytes) async -> String {
         var data = Data()
         do {
             for try await byte in bytes {
                 data.append(byte)
-                if data.count >= 8192 { break }
+                if data.count >= Claude.maxErrorBodyBytes { break }
             }
         } catch {
             // Partial body is still worth surfacing.
@@ -203,17 +263,20 @@ final class ClaudeVisionClient {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    // MARK: - Request building
+    // MARK: - Request building (off the main actor)
 
-    private func makeRequest(apiKey: String,
-                             transcript: String,
-                             screens: [CapturedScreen],
-                             croppedRegion: Data?) throws -> URLRequest {
+    /// Builds the request body. `nonisolated async` so the base64 encoding and
+    /// JSON serialization run on the cooperative pool, never the main thread.
+    private nonisolated func makeRequest(apiKey: String,
+                                         transcript: String,
+                                         screens: [CapturedScreen],
+                                         croppedRegion: Data?,
+                                         priorTurns: [(user: String, assistant: String)]) async throws -> URLRequest {
 
         var messages: [[String: Any]] = []
-        for exchange in history {
-            messages.append(["role": "user", "content": exchange.user])
-            messages.append(["role": "assistant", "content": exchange.assistant])
+        for turn in priorTurns {
+            messages.append(["role": "user", "content": turn.user])
+            messages.append(["role": "assistant", "content": turn.assistant])
         }
         messages.append(["role": "user", "content": userContentBlocks(
             transcript: transcript,
@@ -222,18 +285,18 @@ final class ClaudeVisionClient {
         )])
 
         let body: [String: Any] = [
-            "model": ClaudeVisionClient.model,
-            "max_tokens": ClaudeVisionClient.maxTokens,
+            "model": Claude.model,
+            "max_tokens": Claude.maxTokens,
             "stream": true,
-            "system": systemPrompt,
+            "system": Claude.systemPrompt,
             "messages": messages
         ]
 
-        var request = URLRequest(url: ClaudeVisionClient.endpoint)
+        var request = URLRequest(url: Claude.endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = ClaudeVisionClient.timeout
+        request.timeoutInterval = Claude.timeout
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(ClaudeVisionClient.apiVersion, forHTTPHeaderField: "anthropic-version")
+        request.setValue(Claude.apiVersion, forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
         do {
@@ -247,9 +310,13 @@ final class ClaudeVisionClient {
 
     /// Block order matters — it's how Claude decides what to look at:
     /// circled crop, then each labelled screen, then the spoken question.
-    private func userContentBlocks(transcript: String,
-                                   screens: [CapturedScreen],
-                                   croppedRegion: Data?) -> [[String: Any]] {
+    ///
+    /// Every text block is non-empty by construction: the API rejects blank
+    /// text blocks with a 400, so an unlabelled screen contributes its image
+    /// only.
+    private nonisolated func userContentBlocks(transcript: String,
+                                               screens: [CapturedScreen],
+                                               croppedRegion: Data?) -> [[String: Any]] {
         var blocks: [[String: Any]] = []
 
         if let crop = croppedRegion, !crop.isEmpty {
@@ -257,8 +324,11 @@ final class ClaudeVisionClient {
             blocks.append(imageBlock(crop))
         }
 
-        for screen in screens {
-            blocks.append(textBlock(screen.label))
+        for screen in screens where !screen.jpeg.isEmpty {
+            let label = screen.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !label.isEmpty {
+                blocks.append(textBlock(label))
+            }
             blocks.append(imageBlock(screen.jpeg))
         }
 
@@ -266,11 +336,11 @@ final class ClaudeVisionClient {
         return blocks
     }
 
-    private func textBlock(_ text: String) -> [String: Any] {
+    private nonisolated func textBlock(_ text: String) -> [String: Any] {
         ["type": "text", "text": text]
     }
 
-    private func imageBlock(_ jpeg: Data) -> [String: Any] {
+    private nonisolated func imageBlock(_ jpeg: Data) -> [String: Any] {
         [
             "type": "image",
             "source": [
@@ -285,15 +355,15 @@ final class ClaudeVisionClient {
 
     private func expireStaleHistory() {
         guard let last = lastExchangeAt else { return }
-        if Date().timeIntervalSince(last) > ClaudeVisionClient.historyExpiry {
+        if Date().timeIntervalSince(last) > Claude.historyExpiry {
             resetConversation()
         }
     }
 
     private func record(user: String, assistant: String) {
         history.append(Exchange(user: user, assistant: assistant))
-        if history.count > ClaudeVisionClient.maxHistoryExchanges {
-            history.removeFirst(history.count - ClaudeVisionClient.maxHistoryExchanges)
+        if history.count > Claude.maxHistoryExchanges {
+            history.removeFirst(history.count - Claude.maxHistoryExchanges)
         }
         lastExchangeAt = Date()
     }
