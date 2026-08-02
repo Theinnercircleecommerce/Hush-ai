@@ -221,23 +221,38 @@ final class TalkSession {
     private func run(audioURL: URL, region: CGRect?) async throws {
         guard let appState = appState else { return }
 
-        let raw = try await appState.localService.transcribe(
-            fileURL: audioURL,
-            modelSize: AppSettings.shared.whisperKitModelSize,
-            language: AppSettings.shared.primaryLanguage
-        )
+        // Capture the screen NOW, before transcription, so the screenshot
+        // reflects the moment the circle closed (not seconds later, after
+        // Whisper) and overlaps the transcription work. On the empty-transcript
+        // path below we cancel/discard it — the wasted local capture is free.
+        let screensTask = Task { try await ScreenCaptureService.captureAll(excluding: hushWindows()) }
+
+        let raw: String
+        do {
+            raw = try await appState.localService.transcribe(
+                fileURL: audioURL,
+                modelSize: AppSettings.shared.whisperKitModelSize,
+                language: AppSettings.shared.primaryLanguage
+            )
+        } catch {
+            screensTask.cancel()
+            throw error
+        }
         let transcript = Self.cleanTranscript(raw)
 
         // Empty transcript is an ordinary outcome — held the hotkey, said
         // nothing. Silent return to idle: no error, no API call, no cost.
+        // Money guard: the screenshot capture is local-only, so discarding it
+        // here costs nothing and we make no API call.
         guard !transcript.isEmpty else {
+            screensTask.cancel()
             TalkHotkeyMonitor.diag("SESSION transcript empty — no api call, back to idle")
             appState.hudState = .idle
             return
         }
         TalkHotkeyMonitor.diag("SESSION transcript ok — \(transcript.count) chars")
 
-        let screens = try await ScreenCaptureService.captureAll(excluding: hushWindows())
+        let screens = try await screensTask.value
         TalkHotkeyMonitor.diag("SESSION captured \(screens.count) screen(s)")
 
         let crop = region.flatMap { rect in
@@ -246,28 +261,76 @@ final class TalkSession {
         }
         TalkHotkeyMonitor.diag("SESSION crop=\(crop.map { "\($0.count) bytes" } ?? "none")")
 
+        // Speech is opt-in on the OpenAI key. Decide up front so we only bother
+        // pipelining sentences when we can actually speak them.
+        let canSpeak = KeychainStore.get(.openai) != nil
+
+        // Sentence-pipelined TTS: accumulate streamed chunks, and the instant
+        // the first sentence is complete, hand it to the speech queue while the
+        // rest of the answer still streams. Time-to-first-word then drops to
+        // "first sentence streamed + first TTS fetch" instead of the whole
+        // answer + whole TTS fetch.
+        var speechStarted = false
+        var buffer = ""
+        var handedOver = 0   // characters of `buffer` already enqueued
+
+        func flushCompletedSentences() {
+            guard canSpeak else { return }
+            while let boundary = Self.firstSentenceEnd(in: buffer, after: handedOver) {
+                let segment = String(buffer[buffer.index(buffer.startIndex, offsetBy: handedOver)..<boundary])
+                handedOver = buffer.distance(from: buffer.startIndex, to: boundary)
+                let toSpeak = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !toSpeak.isEmpty else { continue }
+                if !speechStarted {
+                    speechStarted = true
+                    appState.hudState = .speaking
+                }
+                Task { await SpeechOutputService.shared.enqueue(toSpeak) }
+            }
+        }
+
         let answer = try await ClaudeVisionClient.shared.ask(
             transcript: transcript,
             screens: screens,
             croppedRegion: crop
         ) { [weak self] chunk in
             self?.onAnswerChunk?(chunk)
+            buffer += chunk
+            flushCompletedSentences()
         }
         TalkHotkeyMonitor.diag("SESSION answer ok — \(answer.count) chars")
 
-        // SpeechOutputService silently no-ops without an OpenAI key, so
-        // awaitSpeechCompletion would return on its first poll and the user
-        // would get a one-frame amber "Speaking" with no sound at all.
-        guard KeychainStore.get(.openai) != nil else {
+        guard canSpeak else {
             TalkHotkeyMonitor.diag("SESSION no openai key — skipping speech, straight to idle")
             appState.hudState = .idle
             return
         }
 
+        // Hand over the remainder: everything in the streamed buffer after the
+        // last sentence boundary we already enqueued. `handedOver` is a valid
+        // offset into `buffer` (the same string the boundary detection walked).
+        if handedOver < buffer.count {
+            let start = buffer.index(buffer.startIndex, offsetBy: handedOver)
+            let remainder = String(buffer[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !remainder.isEmpty {
+                if !speechStarted {
+                    speechStarted = true
+                    appState.hudState = .speaking
+                }
+                await SpeechOutputService.shared.enqueue(remainder)
+            }
+        }
+
+        // Nothing spoken at all (empty answer, or only sub-threshold fragments
+        // that never formed a sentence and had no remainder): straight to idle.
+        guard speechStarted else {
+            appState.hudState = .idle
+            TalkHotkeyMonitor.diag("SESSION complete — nothing to speak, idle")
+            return
+        }
+
         appState.hudState = .speaking
-        await SpeechOutputService.shared.speak(answer)
-        // `speak` returns once playback STARTS, so hold the speaking state
-        // until the player actually finishes.
+        // Hold the speaking state until the whole queue drains.
         await awaitSpeechCompletion()
 
         appState.hudState = .idle
@@ -320,9 +383,23 @@ final class TalkSession {
 
     /// Whisper emits bracket/parenthesis tags for silence ("[BLANK_AUDIO]",
     /// "(music playing)"). Those are not a question and must not reach the API.
+    ///
+    /// Only KNOWN noise tags are stripped, not all bracketed text — otherwise a
+    /// legitimate question like "what does (a) mean" would lose "(a)". Matches
+    /// are whole-tag and case-insensitive.
+    private static let noiseTagPattern: NSRegularExpression? = {
+        // Bracketed all-caps noise markers: [BLANK_AUDIO], [MUSIC], [NOISE],
+        // [SILENCE], [APPLAUSE], [SOUND], [INAUDIBLE], plus parenthetical
+        // "…playing"/"…music"/"…noise" phrases Whisper emits for ambience.
+        let pattern =
+            "\\[\\s*(BLANK_AUDIO|MUSIC|NOISE|SILENCE|APPLAUSE|SOUND|INAUDIBLE|NO SPEECH|NO_SPEECH)\\s*\\]" +
+            "|\\((?:[^()]*\\b(?:music|noise|applause|silence|inaudible)\\b[^()]*|[^()]*playing[^()]*)\\)"
+        return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }()
+
     private static func cleanTranscript(_ text: String) -> String {
         var cleaned = text
-        if let regex = try? NSRegularExpression(pattern: "\\[.*?\\]|\\(.*?\\)") {
+        if let regex = Self.noiseTagPattern {
             cleaned = regex.stringByReplacingMatches(
                 in: cleaned,
                 range: NSRange(location: 0, length: cleaned.utf16.count),
@@ -330,6 +407,44 @@ final class TalkSession {
             )
         }
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Minimum characters in a segment before we'll treat a terminator as a
+    /// real sentence boundary — stops us TTS-ing a bare "Hi." or "OK.".
+    private static let minSentenceLength = 15
+
+    /// Returns the index in `text` JUST PAST the first sentence terminator that
+    /// occurs after `start` (a UTF-scalar/character offset), or nil if no
+    /// complete sentence is buffered yet.
+    ///
+    /// Heuristic (kept deliberately simple): a terminator is `.`, `!`, `?`, or
+    /// a newline. A `.`/`!`/`?` counts only when the NEXT character is
+    /// whitespace or the end of the buffer (so "3.14" or "google.com" mid-word
+    /// don't split), and only once the segment is at least
+    /// `minSentenceLength` characters long.
+    private static func firstSentenceEnd(in text: String, after start: Int) -> String.Index? {
+        guard start <= text.count else { return nil }
+        let startIndex = text.index(text.startIndex, offsetBy: start)
+        var i = startIndex
+        var count = 0
+        while i < text.endIndex {
+            let ch = text[i]
+            let next = text.index(after: i)
+            if ch == "\n" {
+                // A newline is a boundary as long as anything non-empty precedes
+                // it in this segment.
+                if count >= 1 { return next }
+            } else if ch == "." || ch == "!" || ch == "?" {
+                let atEnd = next == text.endIndex
+                let nextIsSpace = !atEnd && text[next].isWhitespace
+                if count + 1 >= Self.minSentenceLength, (atEnd || nextIsSpace) {
+                    return next
+                }
+            }
+            count += 1
+            i = next
+        }
+        return nil
     }
 
     /// Every window Hush owns, so its own overlay/nudge/menu never appears in
@@ -346,10 +461,13 @@ final class TalkSession {
     /// AVAudioPlayer delegate callback can never pin the session open.
     private func awaitSpeechCompletion() async {
         let deadline = Date().addingTimeInterval(Self.speechWatchdog)
-        while SpeechOutputService.shared.isSpeaking, Date() < deadline {
+        // `isActive` (not `isSpeaking`) covers the window where a segment is
+        // enqueued but its audio is still being fetched — otherwise the first
+        // poll could see isSpeaking == false and return before any sound.
+        while SpeechOutputService.shared.isActive, Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
-        if SpeechOutputService.shared.isSpeaking {
+        if SpeechOutputService.shared.isActive {
             TalkHotkeyMonitor.diag("SESSION speech watchdog fired — forcing stop")
             SpeechOutputService.shared.stop()
         }
