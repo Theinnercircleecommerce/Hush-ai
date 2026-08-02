@@ -133,11 +133,15 @@ final class SpeechOutputService: NSObject, ObservableObject {
             throw TTSError.badResponse
         }
         guard http.statusCode == 200 else {
-            // Include the provider's own message — it distinguishes "no credit"
-            // from a genuine rate limit, which both surface as 429. The body is
-            // OpenAI's error text; the request key is never part of it.
-            let detail = String(data: data.prefix(400), encoding: .utf8) ?? ""
-            TalkHotkeyMonitor.diag("SpeechOutputService: TTS returned HTTP \(http.statusCode) — \(detail)")
+            // Log only the structured error code, never the raw body — the
+            // request `input` is Claude's answer (derived from the user's
+            // screen) and providers can echo request content in error text.
+            var code = ""
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let err = obj["error"] as? [String: Any] {
+                code = (err["code"] as? String) ?? (err["type"] as? String) ?? ""
+            }
+            TalkHotkeyMonitor.diag("SpeechOutputService: TTS returned HTTP \(http.statusCode)\(code.isEmpty ? "" : " (\(code))")")
             throw TTSError.httpError(http.statusCode)
         }
         return data
