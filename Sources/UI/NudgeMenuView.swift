@@ -39,7 +39,7 @@ enum NudgePage: Equatable {
 // MARK: - Shortcut Entry
 
 struct ShortcutEntry: Identifiable {
-    let id = UUID()
+    var id: String { name }
     let name: String
     let keys: [String]        // e.g. ["fn", "⌃"] rendered as keycaps
     let subtitle: String?     // optional, e.g. "hold and speak"
@@ -242,9 +242,9 @@ struct NudgeMenuView: View {
                 .padding(.leading, 4)
 
             VStack(spacing: 0) {
-                ForEach(Array(shortcutEntries.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { rowDivider }
+                ForEach(shortcutEntries) { entry in
                     shortcutEntryRow(entry)
+                    if entry.id != shortcutEntries.last?.id { rowDivider }
                 }
             }
             .background(
