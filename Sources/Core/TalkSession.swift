@@ -103,6 +103,19 @@ final class TalkSession {
             return
         }
 
+        // The audio service is SHARED with dictation, and its startRecording()
+        // has no re-entry guard of its own: called while already recording it
+        // installs a second tap on bus 0, which raises an ObjC exception that
+        // `try` cannot catch. Reachable for real — hands-free dictation
+        // (double-tap the record hotkey) keeps recording with nothing held
+        // down, which is exactly when reaching for ⌃⌥ feels natural.
+        // Dictation already guards the mirror case (AppDelegate checks
+        // hudState == .idle before starting); this is the other half.
+        guard !appState.audioService.isRecording else {
+            TalkHotkeyMonitor.diag("SESSION press ignored — dictation is recording")
+            return
+        }
+
         // Committed. Anything below must clear isBusy on failure.
         isBusy = true
 
@@ -140,13 +153,18 @@ final class TalkSession {
         stopHoldWatchdog()
         isHolding = false
 
+        // Cleanup runs unconditionally and FIRST. The overlay must come down
+        // and the mic must close on every exit from a started session — a
+        // stranded mic is the worst failure this file can produce, so no guard
+        // is allowed to sit above this.
+        let region = CircleOverlayController.shared.end()
+        let recording = appState?.audioService.stopRecording()
+
         guard let appState = appState else {
             isBusy = false
+            TalkHotkeyMonitor.diag("SESSION release — no appState (teardown); overlay and mic closed")
             return
         }
-
-        let region = CircleOverlayController.shared.end()
-        let recording = appState.audioService.stopRecording()
 
         guard let recording = recording else {
             isBusy = false
@@ -224,6 +242,15 @@ final class TalkSession {
             self?.onAnswerChunk?(chunk)
         }
         TalkHotkeyMonitor.diag("SESSION answer ok — \(answer.count) chars")
+
+        // SpeechOutputService silently no-ops without an OpenAI key, so
+        // awaitSpeechCompletion would return on its first poll and the user
+        // would get a one-frame amber "Speaking" with no sound at all.
+        guard KeychainStore.get(.openai) != nil else {
+            TalkHotkeyMonitor.diag("SESSION no openai key — skipping speech, straight to idle")
+            appState.hudState = .idle
+            return
+        }
 
         appState.hudState = .speaking
         await SpeechOutputService.shared.speak(answer)
