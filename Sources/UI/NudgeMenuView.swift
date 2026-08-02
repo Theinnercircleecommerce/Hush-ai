@@ -617,19 +617,6 @@ struct NudgeMenuView: View {
         .padding(.vertical, 10)
     }
 
-    private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 22))
-                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.32))
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-    }
-
     // MARK: - Settings
 
     private let soundOptions = ["None", "Basso", "Blow", "Bottle", "Frog", "Funk",

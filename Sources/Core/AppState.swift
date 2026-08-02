@@ -90,7 +90,7 @@ class AppState: ObservableObject {
             do {
                 let language = AppSettings.shared.primaryLanguage
                 let localModel = AppSettings.shared.whisperKitModelSize
-                let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: "", language: language)
+                let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, language: language)
                 
                 // --- Whisper Hallucination Filter ---
                 var cleanedRawText = rawText
