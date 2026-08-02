@@ -478,6 +478,11 @@ final class TalkSession {
     private func fail(_ message: String) {
         guard let appState = appState else { return }
 
+        // An error must silence any answer already speaking: if `ask` throws
+        // mid-stream, sentence 1 may be enqueued or playing, and a talking
+        // answer under an error card is contradictory. No-op when idle.
+        SpeechOutputService.shared.stop()
+
         var short = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if short.count > Self.maxErrorLength {
             short = String(short.prefix(Self.maxErrorLength)) + "…"
