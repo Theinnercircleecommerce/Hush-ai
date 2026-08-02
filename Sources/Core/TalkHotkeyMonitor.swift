@@ -21,10 +21,21 @@ final class TalkHotkeyMonitor {
             place: .headInsertEventTap,
             options: .listenOnly,
             eventsOfInterest: mask,
-            callback: { _, _, event, refcon in
+            callback: { proxy, type, event, refcon in
                 guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<TalkHotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                monitor.handle(flags: event.flags)
+                switch type {
+                case .tapDisabledByTimeout:
+                    NSLog("Hush: talk event tap re-enabled after tapDisabledByTimeout")
+                    if let tap = monitor.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                case .tapDisabledByUserInput:
+                    NSLog("Hush: talk event tap re-enabled after tapDisabledByUserInput")
+                    if let tap = monitor.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                case .flagsChanged:
+                    monitor.handle(flags: event.flags)
+                default:
+                    break
+                }
                 return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
