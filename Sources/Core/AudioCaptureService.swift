@@ -73,17 +73,6 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-
-        // applySelectedMicrophone() sets kAudioOutputUnitProperty_CurrentDevice
-        // on the input node's AUHAL, which opens that device directly. Stopping
-        // the engine and dropping the reference does NOT uninitialize that audio
-        // unit, so the device stays open and the macOS orange mic indicator
-        // stays lit. Uninitialize it explicitly before releasing the engine.
-        if let unit = engine.inputNode.audioUnit {
-            AudioUnitUninitialize(unit)
-        }
-        engine.reset()
-
         audioEngine = nil // Destroy the engine so macOS drops the mic privacy indicator
         audioFile = nil // Close the file so it's fully flushed for transcription
 
