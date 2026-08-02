@@ -39,37 +39,66 @@ struct NudgeMenuView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var history = HistoryStore.shared
     @State private var page: NudgePage = .home
+    @State private var expanded = false
+    @State private var collapsedSize = CGSize(width: 260, height: 16)
     @State private var newWord = ""
     @State private var newTrigger = ""
     @State private var newReplacement = ""
     var onClose: () -> Void
 
+    /// All grow/shrink motion lives HERE as SwiftUI springs. The window is
+    /// fixed-size; animating its frame re-layouts the hosting view every
+    /// frame and stutters — this doesn't.
     var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-            // Every page stays mounted so navigation is instant — same
-            // stuck-proof pattern NudgeView uses for its states.
-            ZStack(alignment: .top) {
-                pageLayer(homeView, for: .home)
-                pageLayer(settingsView, for: .settings)
-                pageLayer(historyView, for: .history)
-                pageLayer(dictionaryView, for: .dictionary)
-                pageLayer(snippetsView, for: .snippets)
-                pageLayer(insightsView, for: .insights)
-                pageLayer(scratchpadView, for: .scratchpad)
+        let size = expanded ? page.panelSize : collapsedSize
+        return ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                panelHeader
+                // Every page stays mounted so navigation is instant — same
+                // stuck-proof pattern NudgeView uses for its states.
+                ZStack(alignment: .top) {
+                    pageLayer(homeView, for: .home)
+                    pageLayer(settingsView, for: .settings)
+                    pageLayer(historyView, for: .history)
+                    pageLayer(dictionaryView, for: .dictionary)
+                    pageLayer(snippetsView, for: .snippets)
+                    pageLayer(insightsView, for: .insights)
+                    pageLayer(scratchpadView, for: .scratchpad)
+                }
+                .animation(.easeOut(duration: 0.18), value: page)
             }
-            .animation(.easeOut(duration: 0.18), value: page)
+            // Content laid out at full page size ALWAYS — the collapse only
+            // clips it, so nothing re-flows during the open/close spring.
+            .frame(width: page.panelSize.width, height: page.panelSize.height, alignment: .top)
+            .opacity(expanded ? 1 : 0)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(
+                NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24)
+                    .fill(Color(red: 0.05, green: 0.05, blue: 0.05))
+            )
+            .clipShape(NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24)
-                .fill(Color(red: 0.05, green: 0.05, blue: 0.05))
-        )
-        .clipShape(NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(
-            for: Notification.Name("NudgeMenuWillOpen"))) { _ in
+            for: Notification.Name("NudgeMenuWillOpen"))) { note in
+            if let w = note.userInfo?["width"] as? CGFloat,
+               let h = note.userInfo?["height"] as? CGFloat {
+                collapsedSize = CGSize(width: w, height: h)
+            }
             page = .home
+            expanded = false
+            DispatchQueue.main.async {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                    expanded = true
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: Notification.Name("NudgeMenuWillClose"))) { _ in
+            withAnimation(.easeIn(duration: 0.2)) {
+                expanded = false
+            }
         }
     }
 
@@ -115,7 +144,10 @@ struct NudgeMenuView: View {
 
     private func navigate(to newPage: NudgePage) {
         guard newPage != page else { return }
-        page = newPage
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
+            page = newPage
+        }
+        // Window never moves — this only updates hover/click hit-testing.
         NudgeMenuController.shared.resize(to: newPage.panelSize)
     }
 
