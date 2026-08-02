@@ -21,7 +21,11 @@ enum KeychainStore {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess {
+            // Account name and numeric status only — never the key material.
+            NSLog("Hush: keychain write failed for %@ (status %d)", key.rawValue, Int(status))
+        }
     }
 
     static func get(_ key: KeychainKey) -> String? {
@@ -46,6 +50,8 @@ enum KeychainStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawValue
         ]
+        // Status intentionally discarded: errSecItemNotFound is the normal
+        // first-write case, so a failure here carries no useful signal.
         SecItemDelete(query as CFDictionary)
     }
 }

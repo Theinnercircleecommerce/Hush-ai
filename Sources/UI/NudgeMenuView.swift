@@ -727,6 +727,21 @@ struct NudgeMenuView: View {
     @State private var openaiKey: String = ""
     @State private var hasAnthropicKey: Bool = false
     @State private var hasOpenAIKey: Bool = false
+    // Last 4 chars only, cached so `body` never touches the Keychain.
+    @State private var anthropicSuffix: String = ""
+    @State private var openaiSuffix: String = ""
+
+    /// Reads both keys once and caches only the presence flag and the last 4
+    /// characters. The full secret is never retained in view state.
+    private func refreshKeyState() {
+        let anthropic = KeychainStore.get(.anthropic)
+        hasAnthropicKey = anthropic != nil
+        anthropicSuffix = String((anthropic ?? "").suffix(4))
+
+        let openai = KeychainStore.get(.openai)
+        hasOpenAIKey = openai != nil
+        openaiSuffix = String((openai ?? "").suffix(4))
+    }
 
     private var settingsView: some View {
         ScrollView(showsIndicators: false) {
@@ -849,7 +864,7 @@ struct NudgeMenuView: View {
                             HStack(spacing: 6) {
                                 SecureField(
                                     hasAnthropicKey
-                                        ? "sk-ant-••••" + String((KeychainStore.get(.anthropic) ?? "").suffix(4))
+                                        ? "sk-ant-••••" + anthropicSuffix
                                         : "sk-ant-…",
                                     text: $anthropicKey
                                 )
@@ -858,7 +873,7 @@ struct NudgeMenuView: View {
                                 .colorScheme(.dark)
                                 .onSubmit {
                                     KeychainStore.set(anthropicKey, for: .anthropic)
-                                    hasAnthropicKey = KeychainStore.get(.anthropic) != nil
+                                    refreshKeyState()
                                     anthropicKey = ""
                                 }
                                 Image(systemName: hasAnthropicKey ? "checkmark.circle.fill" : "circle.dotted")
@@ -871,7 +886,7 @@ struct NudgeMenuView: View {
                             HStack(spacing: 6) {
                                 SecureField(
                                     hasOpenAIKey
-                                        ? "sk-••••" + String((KeychainStore.get(.openai) ?? "").suffix(4))
+                                        ? "sk-••••" + openaiSuffix
                                         : "sk-…",
                                     text: $openaiKey
                                 )
@@ -880,7 +895,7 @@ struct NudgeMenuView: View {
                                 .colorScheme(.dark)
                                 .onSubmit {
                                     KeychainStore.set(openaiKey, for: .openai)
-                                    hasOpenAIKey = KeychainStore.get(.openai) != nil
+                                    refreshKeyState()
                                     openaiKey = ""
                                 }
                                 Image(systemName: hasOpenAIKey ? "checkmark.circle.fill" : "circle.dotted")
@@ -923,10 +938,6 @@ struct NudgeMenuView: View {
                             }
                         }
                     }
-                }
-                .onAppear {
-                    hasAnthropicKey = KeychainStore.get(.anthropic) != nil
-                    hasOpenAIKey = KeychainStore.get(.openai) != nil
                 }
 
                 // SYSTEM
@@ -1013,6 +1024,7 @@ struct NudgeMenuView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
+        .onAppear { refreshKeyState() }
     }
 
     // MARK: - Shared row helpers
