@@ -59,7 +59,10 @@ class AppSettings: ObservableObject {
     @Published var ollamaModelName: String {
         didSet { UserDefaults.standard.set(ollamaModelName, forKey: "ollamaModelName") }
     }
-    
+    @Published var ttsVoice: String {
+        didSet { UserDefaults.standard.set(ttsVoice, forKey: "ttsVoice") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         
@@ -108,5 +111,6 @@ class AppSettings: ObservableObject {
         self.stopSound = defaults.string(forKey: "stopSound") ?? "Pop"
         self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
+        self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "alloy"
     }
 }

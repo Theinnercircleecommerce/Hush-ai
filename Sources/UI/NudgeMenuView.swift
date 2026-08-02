@@ -721,6 +721,13 @@ struct NudgeMenuView: View {
                                 "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
                                 "Sosumi", "Submarine", "Tink"]
 
+    // API key field state — never holds the real secret; loaded as empty,
+    // placeholder shows the masked suffix when a key exists.
+    @State private var anthropicKey: String = ""
+    @State private var openaiKey: String = ""
+    @State private var hasAnthropicKey: Bool = false
+    @State private var hasOpenAIKey: Bool = false
+
     private var settingsView: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
@@ -833,6 +840,93 @@ struct NudgeMenuView: View {
                 // MICROPHONE
                 settingsSection(title: "MICROPHONE") {
                     MicrophonePickerRow(selectedID: $settings.selectedMicrophoneID)
+                }
+
+                // AI
+                settingsSection(title: "AI") {
+                    VStack(spacing: 0) {
+                        settingsRow(icon: "key", title: "Anthropic key") {
+                            HStack(spacing: 6) {
+                                SecureField(
+                                    hasAnthropicKey
+                                        ? "sk-ant-••••" + String((KeychainStore.get(.anthropic) ?? "").suffix(4))
+                                        : "sk-ant-…",
+                                    text: $anthropicKey
+                                )
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 130)
+                                .colorScheme(.dark)
+                                .onSubmit {
+                                    KeychainStore.set(anthropicKey, for: .anthropic)
+                                    hasAnthropicKey = KeychainStore.get(.anthropic) != nil
+                                    anthropicKey = ""
+                                }
+                                Image(systemName: hasAnthropicKey ? "checkmark.circle.fill" : "circle.dotted")
+                                    .foregroundColor(hasAnthropicKey ? .green : .gray)
+                                    .font(.system(size: 14))
+                            }
+                        }
+                        rowDivider
+                        settingsRow(icon: "key.horizontal", title: "OpenAI key (voice)") {
+                            HStack(spacing: 6) {
+                                SecureField(
+                                    hasOpenAIKey
+                                        ? "sk-••••" + String((KeychainStore.get(.openai) ?? "").suffix(4))
+                                        : "sk-…",
+                                    text: $openaiKey
+                                )
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 130)
+                                .colorScheme(.dark)
+                                .onSubmit {
+                                    KeychainStore.set(openaiKey, for: .openai)
+                                    hasOpenAIKey = KeychainStore.get(.openai) != nil
+                                    openaiKey = ""
+                                }
+                                Image(systemName: hasOpenAIKey ? "checkmark.circle.fill" : "circle.dotted")
+                                    .foregroundColor(hasOpenAIKey ? .green : .gray)
+                                    .font(.system(size: 14))
+                            }
+                        }
+                        rowDivider
+                        settingsRow(icon: "waveform", title: "Voice") {
+                            Picker("", selection: $settings.ttsVoice) {
+                                Text("Alloy").tag("alloy")
+                                Text("Echo").tag("echo")
+                                Text("Fable").tag("fable")
+                                Text("Onyx").tag("onyx")
+                                Text("Nova").tag("nova")
+                                Text("Shimmer").tag("shimmer")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 110)
+                            .colorScheme(.dark)
+                        }
+                        rowDivider
+                        settingsRow(icon: "hand.draw", title: "Talk shortcut") {
+                            HStack(spacing: 3) {
+                                ForEach(["⌃", "⌥"], id: \.self) { key in
+                                    Text(key)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(Color(red: 0.80, green: 0.80, blue: 0.82))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                                .fill(Color(red: 0.20, green: 0.20, blue: 0.22))
+                                        )
+                                }
+                                Text("hold to talk")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.gray)
+                                    .padding(.leading, 4)
+                            }
+                        }
+                    }
+                }
+                .onAppear {
+                    hasAnthropicKey = KeychainStore.get(.anthropic) != nil
+                    hasOpenAIKey = KeychainStore.get(.openai) != nil
                 }
 
                 // SYSTEM
