@@ -68,7 +68,14 @@ final class TalkSession {
     /// Longest error text we'll put on the nudge (it renders on one line).
     private static let maxErrorLength = 60
 
-    private init() {}
+    private init() {
+        // Wire the streaming answer into the cursor-adjacent bubble here — the
+        // one place `onAnswerChunk` is defined and fired — rather than in
+        // AppDelegate, so the visual sink lives with the source it drains.
+        onAnswerChunk = { chunk in
+            AnswerBubbleController.shared.append(chunk)
+        }
+    }
 
     func attach(appState: AppState) {
         self.appState = appState
@@ -119,8 +126,10 @@ final class TalkSession {
         // Committed. Anything below must clear isBusy on failure.
         isBusy = true
 
-        // Barge-in: a previous answer may still be playing.
+        // Barge-in: a previous answer may still be playing, and its bubble
+        // may still be on screen.
         SpeechOutputService.shared.stop()
+        AnswerBubbleController.shared.clear()
 
         CircleOverlayController.shared.begin()
 
@@ -326,6 +335,7 @@ final class TalkSession {
         CircleOverlayController.shared.panelWindows
             + NotchNudgeController.shared.panelWindows
             + NudgeMenuController.shared.panelWindows
+            + AnswerBubbleController.shared.panelWindows
     }
 
     /// Polls rather than observing `$isSpeaking`: one Bool read every 100ms
