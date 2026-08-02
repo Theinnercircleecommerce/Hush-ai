@@ -24,9 +24,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Show the idle pill HUD persistently right away!
         NotchNudgeController.shared.show(appState: self.appState)
 
-        // Temporary wiring for talk hotkey monitor
-        TalkHotkeyMonitor.shared.onPress = { NSLog("Hush: TALK press") }
-        TalkHotkeyMonitor.shared.onRelease = { NSLog("Hush: TALK release") }
+        // Temporary wiring for talk hotkey monitor: hold ⌃⌥ → circle overlay.
+        TalkHotkeyMonitor.shared.onPress = {
+            CircleOverlayController.shared.begin()
+        }
+        TalkHotkeyMonitor.shared.onRelease = {
+            let rect = CircleOverlayController.shared.end()
+            NSLog("Hush: TALK release circle=%@",
+                  rect.map { NSStringFromRect($0) } ?? "nil")
+        }
         TalkHotkeyMonitor.shared.start()
 
         // Open onboarding if not completed, otherwise launch silently in the menu bar!
