@@ -62,6 +62,9 @@ class AppSettings: ObservableObject {
     @Published var ttsVoice: String {
         didSet { UserDefaults.standard.set(ttsVoice, forKey: "ttsVoice") }
     }
+    @Published var showAnswerBubble: Bool {
+        didSet { UserDefaults.standard.set(showAnswerBubble, forKey: "showAnswerBubble") }
+    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -112,5 +115,7 @@ class AppSettings: ObservableObject {
         self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
         self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "alloy"
+        // Owner preference: voice-only by default; the written answer is opt-in.
+        self.showAnswerBubble = defaults.object(forKey: "showAnswerBubble") as? Bool ?? false
     }
 }

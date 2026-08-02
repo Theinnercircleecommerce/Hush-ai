@@ -918,6 +918,12 @@ struct NudgeMenuView: View {
                             .colorScheme(.dark)
                         }
                         rowDivider
+                        settingsRow(icon: "text.bubble", title: "Written answer") {
+                            Toggle("", isOn: $settings.showAnswerBubble)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        rowDivider
                         settingsRow(icon: "hand.draw", title: "Talk shortcut") {
                             HStack(spacing: 3) {
                                 ForEach(["⌃", "⌥"], id: \.self) { key in

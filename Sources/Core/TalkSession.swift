@@ -73,6 +73,9 @@ final class TalkSession {
         // one place `onAnswerChunk` is defined and fired — rather than in
         // AppDelegate, so the visual sink lives with the source it drains.
         onAnswerChunk = { chunk in
+            // Owner preference: voice-only by default. Checked per chunk so
+            // flipping the setting applies to the very next answer.
+            guard AppSettings.shared.showAnswerBubble else { return }
             AnswerBubbleController.shared.append(chunk)
         }
     }
