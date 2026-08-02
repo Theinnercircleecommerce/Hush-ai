@@ -99,6 +99,11 @@ final class SpeechOutputService: NSObject, ObservableObject {
 
     private func stopPlayback() {
         if let p = player {
+            // Detach before stopping so a late delegate callback for this
+            // player can't fire at all. The identity check in the delegate
+            // already guards this, but that relies on main-actor ordering —
+            // this removes the reliance.
+            p.delegate = nil
             p.stop()
             player = nil
         }
