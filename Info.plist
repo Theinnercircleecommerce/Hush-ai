@@ -24,6 +24,8 @@
 	<string>Hush needs microphone access to dictate text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Hush uses speech recognition to convert your voice to text.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Hush captures your screen only when you hold the talk shortcut, so it can answer questions about what you see.</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
