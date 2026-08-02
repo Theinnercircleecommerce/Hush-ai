@@ -29,13 +29,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         let fileURL = tempDir.appendingPathComponent(fileName)
         self.currentFileURL = fileURL
 
-        // ONE engine for the app's lifetime (HeyClicky's proven pattern).
-        // Creating a fresh engine per press forces a full input-device
-        // teardown/renegotiation on every dictation, which mangles the start
-        // sound and has wedged CoreAudio outright. stop() releases the mic;
-        // the engine object itself is cheap to keep.
-        let engine = audioEngine ?? AVAudioEngine()
-        audioEngine = engine
+        let engine = AVAudioEngine()
         applySelectedMicrophone(to: engine)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
 
@@ -78,7 +72,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         let duration = Date().timeIntervalSince(start)
 
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop() // Releases the mic; the engine is kept for reuse (see startRecording)
+        engine.stop()
+        audioEngine = nil // Destroy the engine so macOS drops the mic privacy indicator
         audioFile = nil // Close the file so it's fully flushed for transcription
 
         isRecording = false
@@ -131,23 +126,8 @@ extension AudioCaptureService {
     /// installing the tap / starting the engine.
     func applySelectedMicrophone(to engine: AVAudioEngine) {
         let uid = AppSettings.shared.selectedMicrophoneID
-        var resolvedID: AudioDeviceID?
-
-        if !uid.isEmpty {
-            // The user explicitly picked a mic — always honor it.
-            resolvedID = Self.audioDeviceID(forUID: uid)
-        } else if let defaultID = Self.defaultInputDeviceID(),
-                  Self.isBluetoothTransport(defaultID),
-                  let builtIn = Self.builtInInputDeviceID() {
-            // "Default" resolved to a Bluetooth mic (e.g. AirPods). Opening a
-            // BT mic drops the whole headset from high-quality listening into
-            // call mode: system sounds go thin and distant, and the profile
-            // switch has wedged CoreAudio entirely. Record from the built-in
-            // mic instead; the headset keeps playing untouched.
-            resolvedID = builtIn
-        }
-
-        guard var deviceID = resolvedID,
+        guard !uid.isEmpty,
+              var deviceID = Self.audioDeviceID(forUID: uid),
               let unit = engine.inputNode.audioUnit else { return }
         AudioUnitSetProperty(
             unit,
@@ -155,78 +135,5 @@ extension AudioCaptureService {
             kAudioUnitScope_Global, 0,
             &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size)
         )
-    }
-
-    /// The system default input device, or nil.
-    static func defaultInputDeviceID() -> AudioDeviceID? {
-        var deviceID = kAudioObjectUnknown
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
-        )
-        return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
-    }
-
-    /// True when the device reaches the Mac over Bluetooth (classic or LE).
-    static func isBluetoothTransport(_ deviceID: AudioDeviceID) -> Bool {
-        var transport: UInt32 = 0
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyTransportType,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport) == noErr else {
-            return false
-        }
-        return transport == kAudioDeviceTransportTypeBluetooth
-            || transport == kAudioDeviceTransportTypeBluetoothLE
-    }
-
-    /// The first input device built into the Mac, or nil.
-    static func builtInInputDeviceID() -> AudioDeviceID? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(
-            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
-        ) == noErr else { return nil }
-        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
-        var devices = [AudioDeviceID](repeating: kAudioObjectUnknown, count: count)
-        guard AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devices
-        ) == noErr else { return nil }
-
-        for device in devices {
-            var transport: UInt32 = 0
-            var transportAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyTransportType,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            var transportSize = UInt32(MemoryLayout<UInt32>.size)
-            guard AudioObjectGetPropertyData(device, &transportAddress, 0, nil, &transportSize, &transport) == noErr,
-                  transport == kAudioDeviceTransportTypeBuiltIn else { continue }
-
-            // Input side only: does it have input channels?
-            var streamAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyStreams,
-                mScope: kAudioDevicePropertyScopeInput,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            var streamSize: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(device, &streamAddress, 0, nil, &streamSize) == noErr,
-                  streamSize > 0 else { continue }
-            return device
-        }
-        return nil
     }
 }

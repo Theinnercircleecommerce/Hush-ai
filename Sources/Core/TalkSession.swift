@@ -242,6 +242,9 @@ final class TalkSession {
             self?.onAnswerChunk?(chunk)
         }
         TalkHotkeyMonitor.diag("SESSION answer ok — \(answer.count) chars")
+        // TEMP (remove when Task 8's bubble renders this on screen): with TTS
+        // unavailable the answer is otherwise invisible to the user.
+        TalkHotkeyMonitor.diag("SESSION answer text: \(answer)")
 
         // SpeechOutputService silently no-ops without an OpenAI key, so
         // awaitSpeechCompletion would return on its first poll and the user
