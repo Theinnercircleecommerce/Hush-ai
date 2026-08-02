@@ -39,6 +39,20 @@ final class CircleOverlayController {
     /// Fewer points than this means the user held the hotkey without really
     /// drawing (a stray click, a twitch) — treat it as "no circle".
     private static let minimumPoints = 5
+    /// A sample is only recorded once the cursor has moved at least this far
+    /// from the previous recorded point. Samples are TIME-based (60fps), not
+    /// motion-based, so without this gate a stationary click-and-hold piles
+    /// up identical points and clears `minimumPoints` in ~84ms. 2pt is below
+    /// the smallest deliberate hand movement but above cursor jitter, and it
+    /// also keeps a long hold from accumulating ~1800 near-duplicate points
+    /// that the Canvas would re-walk every frame.
+    private static let minimumMovement: CGFloat = 2
+    /// The raw stroke must span at least this much in its LARGER dimension.
+    /// Rejects a degenerate box that the padding would otherwise inflate into
+    /// a plausible-looking 24x24 rect. Deliberately `max` and not both axes:
+    /// striking through or underlining a line of text is a legitimate gesture
+    /// with a near-zero height.
+    private static let minimumStrokeSpan: CGFloat = 16
     /// Breathing room around the stroke so the crop includes what was ringed,
     /// not just the ink.
     private static let padding: CGFloat = 12
@@ -143,6 +157,9 @@ final class CircleOverlayController {
         }
 
         let stroke = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        // Second line of defence behind the movement gate: never let the
+        // padding inflate a degenerate stroke into a believable rect.
+        guard max(stroke.width, stroke.height) >= Self.minimumStrokeSpan else { return nil }
         let padded = stroke.insetBy(dx: -Self.padding, dy: -Self.padding)
         let clamped = padded.intersection(screenFrame)
         guard !clamped.isNull, clamped.width > 0, clamped.height > 0 else { return nil }
@@ -163,19 +180,43 @@ final class CircleOverlayController {
 
     private func sampleTick() {
         guard isActive else { return }
+
+        // SELF-HEAL. While active, every display is covered by a transparent
+        // panel that swallows clicks. If the paired onRelease is ever lost —
+        // event tap disabled, fast user switch, Space transition, app
+        // suspended mid-hold — nothing else would ever take those panels
+        // down, leaving a Mac where no click registers anywhere. Re-checking
+        // the live modifier state every frame means the overlay can only
+        // outlive the hold by ~16ms.
+        guard NSEvent.modifierFlags.contains([.control, .option]) else {
+            end()
+            return
+        }
+
         // Only draw while the primary button is down — hovering with the
         // hotkey held draws nothing.
         guard NSEvent.pressedMouseButtons & 1 != 0 else { return }
 
         let global = NSEvent.mouseLocation
-        // Exact containment first. NSRect.contains excludes the max edges,
-        // and macOS pins the cursor to exactly frame.maxY when it's slammed
-        // against the top of a display — hence the 1pt-slack fallback.
-        let overlayForPoint = overlays.values.first { NSPointInRect(global, $0.screenFrame) }
-            ?? overlays.values.first { $0.screenFrame.insetBy(dx: -1, dy: -1).contains(global) }
-        guard let overlay = overlayForPoint else { return }
+        guard let overlay = overlay(containing: global) else { return }
 
-        if owningScreenFrame == nil { owningScreenFrame = overlay.screenFrame }
+        // Ink must agree with the rect. The returned rect is clipped to the
+        // screen the stroke STARTED on, so refuse samples from any other
+        // display rather than drawing teal ink that is silently discarded —
+        // the stroke visibly stops at the real capture boundary.
+        if let owning = owningScreenFrame {
+            guard overlay.screenFrame == owning else { return }
+        } else {
+            owningScreenFrame = overlay.screenFrame
+        }
+
+        // Movement gate — see `minimumMovement`.
+        if let previous = globalPoints.last {
+            let dx = global.x - previous.x
+            let dy = global.y - previous.y
+            guard dx * dx + dy * dy >= Self.minimumMovement * Self.minimumMovement else { return }
+        }
+
         globalPoints.append(global)
 
         // AppKit global space is bottom-left origin; the SwiftUI Canvas is
@@ -187,20 +228,50 @@ final class CircleOverlayController {
         overlay.model.points.append(local)
     }
 
+    /// The overlay whose display contains `global`. Iterates in
+    /// `NSScreen.screens` order — dictionary order is unspecified, which on
+    /// mirrored or overlapping displays would resolve a boundary point
+    /// differently from run to run.
+    ///
+    /// Exact containment first. `NSRect.contains` excludes the max edges, and
+    /// macOS pins the cursor to exactly `frame.maxY` when it is slammed
+    /// against the top of a display — hence the 1pt-slack second pass.
+    private func overlay(containing global: CGPoint) -> ScreenOverlay? {
+        let ordered = NSScreen.screens.compactMap { screen -> ScreenOverlay? in
+            guard let id = Self.displayID(of: screen) else { return nil }
+            return overlays[id]
+        }
+        return ordered.first { NSPointInRect(global, $0.screenFrame) }
+            ?? ordered.first { $0.screenFrame.insetBy(dx: -1, dy: -1).contains(global) }
+    }
+
     // MARK: - Panels
 
-    /// Create any missing panel and refresh every panel's frame to the
-    /// current display layout. Existing panels are reused, never rebuilt;
-    /// panels for displays that went away simply stay hidden.
+    /// Create any missing panel, refresh every panel's frame to the current
+    /// display layout, and drop panels whose display is gone. Panels for
+    /// LIVE displays are reused, never rebuilt.
     private func syncPanels() {
+        var live: Set<CGDirectDisplayID> = []
         for screen in NSScreen.screens {
             guard let id = Self.displayID(of: screen) else { continue }
+            live.insert(id)
             if let existing = overlays[id] {
                 existing.screenFrame = screen.frame
                 existing.panel.setFrame(screen.frame, display: false)
             } else {
                 overlays[id] = makeOverlay(for: screen)
             }
+        }
+
+        // Prune orphans. A panel for a disconnected display keeps a frame
+        // that matches no real screen; AppKit would constrain it onto a
+        // surviving display where begin()'s loop makes it a second,
+        // invisible click-eating surface.
+        for (id, overlay) in overlays where !live.contains(id) {
+            overlay.contentView.isCapturing = false
+            overlay.panel.ignoresMouseEvents = true
+            overlay.panel.orderOut(nil)
+            overlays.removeValue(forKey: id)
         }
     }
 
