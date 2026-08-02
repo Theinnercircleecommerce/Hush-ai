@@ -30,8 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         TalkHotkeyMonitor.shared.onRelease = {
             let rect = CircleOverlayController.shared.end()
-            NSLog("Hush: TALK release circle=%@",
-                  rect.map { NSStringFromRect($0) } ?? "nil")
+            TalkHotkeyMonitor.diag("release circle=\(rect.map { NSStringFromRect($0) } ?? "nil")")
         }
         TalkHotkeyMonitor.shared.start()
 

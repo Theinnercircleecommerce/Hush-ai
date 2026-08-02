@@ -20,6 +20,10 @@ final class CircleOverlayController {
 
     /// One overlay per physical display, keyed by CGDirectDisplayID.
     private var overlays: [CGDirectDisplayID: ScreenOverlay] = [:]
+
+    /// The overlay panels, for excluding Hush's own windows from screen
+    /// capture (Task 7 wires this into TalkSession's hushWindows).
+    var panelWindows: [NSWindow] { overlays.values.map(\.panel) }
     /// 60fps cursor sampler. Only alive between begin() and end() — this is
     /// a menu-bar app that stays resident for days.
     private var sampleTimer: Timer?
