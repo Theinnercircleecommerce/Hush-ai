@@ -26,6 +26,14 @@ final class NudgeMenuController {
     /// current — otherwise a re-hover during the shrink would be undone by
     /// the stale completion, stranding the panel hidden with isOpen == true.
     private var closeGeneration = 0
+    /// Size the panel is supposed to be while open — lets the poll detect a
+    /// grow animation that got clobbered and never reached full size.
+    private var targetSize = NudgeMenuLayout.homeSize
+    private var stuckTicks = 0
+    /// Consecutive poll ticks the mouse has been inside a hover zone while
+    /// closed. Opening requires 2 (~0.1s) so flicking the cursor THROUGH
+    /// the zone on the way somewhere else doesn't trigger the panel.
+    private var dwellTicks = 0
 
     func attach(appState: AppState) {
         self.appState = appState
@@ -72,7 +80,8 @@ final class NudgeMenuController {
 
     private func startHoverMonitoring() {
         hoverTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+        // 20 Hz — a 10 Hz poll can miss a fast flick through the zone.
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
             self?.hoverTick()
         }
         // .common so the poll keeps running while menus/scrolling are active.
@@ -80,13 +89,20 @@ final class NudgeMenuController {
         hoverTimer = timer
     }
 
-    /// The strip that counts as "hovering the notch": full notch width +
-    /// shelf wings, plus a few points below the notch line so the target
-    /// is reachable even though macOS nudges the cursor out of the notch.
+    /// The strip that counts as "hovering the notch".
+    ///
+    /// Sized to the VISIBLE target, nothing more: the hardware notch on a
+    /// notched screen, the little pill on an external. Earlier versions
+    /// erred both ways — 20pt tall was unhittable, 40pt tall × 340 wide
+    /// swallowed Chrome tabs near the top-center. The notch/pill never
+    /// extends below the menu bar, so neither should the hitbox.
     private func hoverZone(for screen: NSScreen) -> NSRect {
         let metrics = NotchMetrics.metrics(for: screen)
-        let width: CGFloat = metrics.hasNotch ? metrics.notchWidth + 72 : 260
-        let height: CGFloat = metrics.hasNotch ? metrics.notchHeight + 6 : 20
+        // Notched: exactly the notch, +8pt width slack.
+        // Notchless: the pill (180 virtual width) +8pt, and only the top
+        // 14pt of the screen — you have to actually touch the pill.
+        let width: CGFloat = metrics.hasNotch ? metrics.notchWidth + 8 : 188
+        let height: CGFloat = metrics.hasNotch ? metrics.notchHeight : 14
         return NSRect(
             x: screen.frame.midX - width / 2,
             y: screen.frame.maxY - height,
@@ -98,34 +114,93 @@ final class NudgeMenuController {
     private func hoverTick() {
         guard let appState = appState else { return }
 
-        // Self-heal: if state says open but the panel is not visible,
-        // reset so the next hover can open. (Guards against any future
-        // desync of the same class as the close-animation race.)
+        // Self-heal A: state says open but the panel was hidden out from
+        // under us — reset so the next hover can open.
         if isOpen, let panel = menuPanel, !panel.isVisible {
             isOpen = false
             removeClickOutsideMonitor()
+            stuckTicks = 0
+            Self.log("HEAL hidden-while-open → isOpen=false")
         }
 
         let mouse = NSEvent.mouseLocation
 
         if !isOpen {
-            guard appState.hudState == .idle else { return }
-            for screen in NSScreen.screens where hoverZone(for: screen).contains(mouse) {
-                open(on: screen)
+            guard appState.hudState == .idle else {
+                // Hover is silently dead whenever the nudge is not idle.
+                // Log it once per stuck stretch so a stuck state is visible.
+                if NSScreen.screens.contains(where: { hoverZone(for: $0).contains(mouse) }) {
+                    Self.log("BLOCKED hover in zone but hudState=\(appState.hudState)")
+                }
                 return
+            }
+            if let screen = NSScreen.screens.first(where: { hoverZone(for: $0).contains(mouse) }) {
+                dwellTicks += 1
+                if dwellTicks >= 2 {   // ~0.1s on target — not a drive-by
+                    dwellTicks = 0
+                    open(on: screen)
+                }
+            } else {
+                dwellTicks = 0
             }
         } else if let panel = menuPanel {
             let nearPanel = panel.frame.insetBy(dx: -8, dy: -8).contains(mouse)
             let inZone = NSScreen.screens.contains { hoverZone(for: $0).contains(mouse) }
             if nearPanel || inZone {
                 outsideTicks = 0
+                // Self-heal B: open, visible, mouse on target — but the
+                // panel never reached full size. That is a clobbered grow
+                // animation (a close animation was still in flight). Force
+                // the frame; do not wait for an animation that lost.
+                if panel.frame.height < targetSize.height - 2 {
+                    stuckTicks += 1
+                    if stuckTicks >= 8 {   // ~0.4s stuck small
+                        stuckTicks = 0
+                        forceOpenFrame()
+                        Self.log("HEAL stuck-small → forced frame to \(targetSize)")
+                    }
+                } else {
+                    stuckTicks = 0
+                }
             } else {
+                stuckTicks = 0
                 outsideTicks += 1
-                if outsideTicks >= 4 {   // ~0.4s away → close
+                if outsideTicks >= 8 {   // ~0.4s away → close
                     outsideTicks = 0
                     close()
                 }
             }
+        }
+    }
+
+    /// Snap the panel straight to its open frame, no animation. Used to
+    /// recover from an animation that got clobbered mid-flight.
+    private func forceOpenFrame() {
+        guard let panel = menuPanel,
+              let screen = openScreen ?? panel.screen ?? NSScreen.main else { return }
+        let frame = NSRect(
+            x: screen.frame.midX - targetSize.width / 2,
+            y: screen.frame.maxY - targetSize.height,
+            width: targetSize.width, height: targetSize.height
+        )
+        panel.setFrame(frame, display: true)
+        panel.alphaValue = 1
+        panel.orderFront(nil)
+    }
+
+    /// Diagnostic trail — read with:
+    /// `tail -20 "$(getconf DARWIN_USER_TEMP_DIR)/hush-hover.log"`
+    private static func log(_ message: String) {
+        let line = "\(Date().timeIntervalSince1970) \(message)\n"
+        guard let data = line.data(using: .utf8) else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hush-hover.log")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            try? handle.close()
+        } else {
+            try? data.write(to: url)
         }
     }
 
@@ -150,6 +225,18 @@ final class NudgeMenuController {
             y: topY - size.height,
             width: size.width, height: size.height
         )
+        targetSize = size
+        stuckTicks = 0
+
+        // Cancel any in-flight close animation. Setting the frame directly
+        // does NOT stop a running CAAnimation — it keeps animating toward
+        // the collapsed shelf and clobbers the grow below, leaving the panel
+        // stuck at shelf size (looks exactly like "hover did nothing").
+        // A zero-duration animation on the same property replaces it.
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0
+            panel.animator().setFrame(startFrame, display: false)
+        }
         panel.setFrame(startFrame, display: false)
         panel.alphaValue = 1
         panel.orderFront(nil)
@@ -205,6 +292,8 @@ final class NudgeMenuController {
     func resize(to size: CGSize) {
         guard let panel = menuPanel,
               let screen = openScreen ?? panel.screen ?? NSScreen.main else { return }
+        targetSize = size
+        stuckTicks = 0
         let topY = screen.frame.maxY
         let frame = NSRect(x: screen.frame.midX - size.width / 2,
                            y: topY - size.height,
