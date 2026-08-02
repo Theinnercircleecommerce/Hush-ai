@@ -35,6 +35,9 @@ final class CircleOverlayController {
     /// Bumped by begin() and end() so a pending fade-out is abandoned if a
     /// new session started in the meantime.
     private var sessionGeneration = 0
+    /// Consecutive ticks the talk modifiers have read as absent. Drives the
+    /// debounced self-heal; reset by any tick that sees them held.
+    private var modifiersAbsentTicks = 0
 
     /// Fewer points than this means the user held the hotkey without really
     /// drawing (a stray click, a twitch) — treat it as "no circle".
@@ -57,6 +60,16 @@ final class CircleOverlayController {
     /// not just the ink.
     private static let padding: CGFloat = 12
     private static let fadeDuration: TimeInterval = 0.25
+    /// The self-heal only fires after the modifiers have read as absent for
+    /// this many CONSECUTIVE ticks — ~300ms at 60fps. Without the grace
+    /// period the heal races the normal release path and wins: modifier
+    /// state goes false the instant the keys are lifted, whereas onRelease
+    /// arrives later (event-tap callback → DispatchQueue.main.async), and
+    /// CFRunLoop services timers before ports. A heal that fired first would
+    /// consume the session and leave the real `end()` returning nil, quietly
+    /// throwing away the user's circle. 300ms is far longer than that gap
+    /// yet short enough that a genuine disaster recovery is invisible.
+    private static let selfHealGraceTicks = 18
 
     private init() {}
 
@@ -70,6 +83,7 @@ final class CircleOverlayController {
 
         globalPoints.removeAll()
         owningScreenFrame = nil
+        modifiersAbsentTicks = 0
 
         syncPanels()
 
@@ -181,15 +195,20 @@ final class CircleOverlayController {
     private func sampleTick() {
         guard isActive else { return }
 
-        // SELF-HEAL. While active, every display is covered by a transparent
-        // panel that swallows clicks. If the paired onRelease is ever lost —
-        // event tap disabled, fast user switch, Space transition, app
-        // suspended mid-hold — nothing else would ever take those panels
-        // down, leaving a Mac where no click registers anywhere. Re-checking
-        // the live modifier state every frame means the overlay can only
-        // outlive the hold by ~16ms.
-        guard NSEvent.modifierFlags.contains([.control, .option]) else {
-            end()
+        // SELF-HEAL (debounced). While active, every display is covered by a
+        // transparent panel that swallows clicks. If the paired onRelease is
+        // ever lost — event tap disabled, fast user switch, Space
+        // transition, app suspended mid-hold — nothing else would ever take
+        // those panels down, leaving a Mac where no click registers
+        // anywhere. But healing on the FIRST absent tick would steal the
+        // session from the normal release path, which always arrives a
+        // little later; hence the grace run. See `selfHealGraceTicks`.
+        if NSEvent.modifierFlags.contains([.control, .option]) {
+            modifiersAbsentTicks = 0
+        } else {
+            modifiersAbsentTicks += 1
+            if modifiersAbsentTicks >= Self.selfHealGraceTicks { end() }
+            // Either way, stop sampling — the user has let go.
             return
         }
 
@@ -270,7 +289,12 @@ final class CircleOverlayController {
         for (id, overlay) in overlays where !live.contains(id) {
             overlay.contentView.isCapturing = false
             overlay.panel.ignoresMouseEvents = true
-            overlay.panel.orderOut(nil)
+            // close(), not just orderOut(): orderOut leaves the window in the
+            // application's window list, and isReleasedWhenClosed = false
+            // means dropping the dictionary reference alone would strand the
+            // panel alive — unreachable for reuse and accumulating across
+            // dock/undock cycles.
+            overlay.panel.close()
             overlays.removeValue(forKey: id)
         }
     }
