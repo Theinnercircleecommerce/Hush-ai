@@ -38,6 +38,8 @@ final class CircleOverlayController {
     /// Consecutive ticks the talk modifiers have read as absent. Drives the
     /// debounced self-heal; reset by any tick that sees them held.
     private var modifiersAbsentTicks = 0
+    /// TEMP DIAGNOSTIC — remove with the TALK diag lines.
+    private var diagTickCount = 0
 
     /// Fewer points than this means the user held the hotkey without really
     /// drawing (a stray click, a twitch) — treat it as "no circle".
@@ -78,12 +80,14 @@ final class CircleOverlayController {
     /// Show the overlays and start sampling the cursor.
     func begin() {
         guard !isActive else { return }
+        TalkHotkeyMonitor.diag("overlay begin(), screens=\(NSScreen.screens.count)")
         isActive = true
         sessionGeneration += 1
 
         globalPoints.removeAll()
         owningScreenFrame = nil
         modifiersAbsentTicks = 0
+        diagTickCount = 0
 
         syncPanels()
 
@@ -99,10 +103,10 @@ final class CircleOverlayController {
 
         for overlay in overlays.values {
             overlay.model.reset()
-            overlay.contentView.isCapturing = true
-            // Capture the drag so it draws instead of ALSO dragging /
-            // selecting content in the app underneath.
-            overlay.panel.ignoresMouseEvents = false
+            // Owner decision (QA session): drawing needs no mouse button —
+            // hold ⌃⌥ and move the cursor, like HeyClicky. The panels
+            // therefore stay click-through at all times; they only display
+            // ink, never capture input.
             overlay.panel.orderFront(nil)
         }
 
@@ -122,6 +126,7 @@ final class CircleOverlayController {
         sampleTimer = nil
 
         let rect = boundingRect()
+        TalkHotkeyMonitor.diag("overlay end(), points=\(globalPoints.count) rect=\(rect.map { NSStringFromRect($0) } ?? "nil")")
 
         for overlay in overlays.values {
             overlay.contentView.isCapturing = false
@@ -195,6 +200,14 @@ final class CircleOverlayController {
     private func sampleTick() {
         guard isActive else { return }
 
+        // TEMP DIAGNOSTIC (remove with the other TALK diag lines): trace the
+        // first ticks of each session so the log shows which gate blocks.
+        diagTickCount += 1
+        if diagTickCount <= 10 {
+            let flags = NSEvent.modifierFlags
+            TalkHotkeyMonitor.diag("tick \(diagTickCount): ctrl=\(flags.contains(.control)) opt=\(flags.contains(.option)) button=\(NSEvent.pressedMouseButtons & 1) mouse=\(NSStringFromPoint(NSEvent.mouseLocation)) overlayHit=\(overlay(containing: NSEvent.mouseLocation) != nil) points=\(globalPoints.count)")
+        }
+
         // SELF-HEAL (debounced). While active, every display is covered by a
         // transparent panel that swallows clicks. If the paired onRelease is
         // ever lost — event tap disabled, fast user switch, Space
@@ -211,10 +224,6 @@ final class CircleOverlayController {
             // Either way, stop sampling — the user has let go.
             return
         }
-
-        // Only draw while the primary button is down — hovering with the
-        // hotkey held draws nothing.
-        guard NSEvent.pressedMouseButtons & 1 != 0 else { return }
 
         let global = NSEvent.mouseLocation
         guard let overlay = overlay(containing: global) else { return }

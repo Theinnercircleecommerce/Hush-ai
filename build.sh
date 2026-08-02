@@ -38,6 +38,24 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Content
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
 echo "Signing the application..."
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Sign with the stable Apple Development identity so macOS keeps the
+# Accessibility/Screen Recording grants across rebuilds. Ad-hoc signing (-)
+# changes the binary hash every build, which silently revokes them.
+SIGN_IDENTITY="Apple Development: Joey Beeren (TXRHF667D4)"
+if security find-identity -v -p codesigning | grep -q "$SIGN_IDENTITY"; then
+    codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+else
+    echo "WARNING: '$SIGN_IDENTITY' not found (expired?). Falling back to ad-hoc;"
+    echo "         Accessibility permission will need re-granting after this build."
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo "App bundle created successfully at $APP_BUNDLE!"
+
+# Keep the installed copy in sync — the Dock/Launchpad icon points at
+# /Applications/Hush.app, and a stale copy there means testing old code.
+if [ -d "/Applications/Hush.app" ]; then
+    echo "Updating /Applications/Hush.app..."
+    rm -rf /Applications/Hush.app
+    ditto "$APP_BUNDLE" /Applications/Hush.app
+fi
