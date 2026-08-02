@@ -86,14 +86,11 @@ class AppState: ObservableObject {
         
         self.hudState = .transcribing
         
-        let dictionaryWords = HistoryStore.shared.dictionaryItems.map { $0.word }.joined(separator: ", ")
-        let snippets = HistoryStore.shared.snippets
-        
         Task {
             do {
                 let language = AppSettings.shared.primaryLanguage
                 let localModel = AppSettings.shared.whisperKitModelSize
-                let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: dictionaryWords, language: language)
+                let rawText = try await localService.transcribe(fileURL: result.url, modelSize: localModel, prompt: "", language: language)
                 
                 // --- Whisper Hallucination Filter ---
                 var cleanedRawText = rawText
@@ -125,12 +122,6 @@ class AppState: ObservableObject {
                     } catch OllamaCleanupService.OllamaError.notRunning {
                         showOllamaWarning = true
                     }
-                }
-                
-                // Apply snippets
-                for snippet in snippets {
-                    // Simple case-insensitive replacement
-                    finalText = finalText.replacingOccurrences(of: snippet.trigger, with: snippet.replacement, options: .caseInsensitive)
                 }
                 
                 // Press Enter Command
