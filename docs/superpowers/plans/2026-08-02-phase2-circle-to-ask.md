@@ -103,7 +103,7 @@ In `Sources/UI/NudgeMenuView.swift`, add a new settings section (place it direct
 - Row "Anthropic key" — `SecureField` bound to `@State private var anthropicKey`, placeholder `sk-ant-…`; on commit (`.onSubmit`) call `KeychainStore.set(anthropicKey, for: .anthropic)`. Show a green checkmark when `KeychainStore.get(.anthropic) != nil`, gray dot otherwise.
 - Row "OpenAI key (voice)" — same pattern with `.openai`, placeholder `sk-…`.
 - Row "Voice" — `Picker` bound to `settings.ttsVoice` with options: alloy, echo, fable, onyx, nova, shimmer (tags = lowercase strings).
-- Row "Talk shortcut" — `KeyboardShortcuts.Recorder(for: .talk)` (the name is added in Task 2; if Task 2 hasn't run yet, add the recorder row in Task 2 instead and leave a `// TODO Task 2` comment here).
+- Row "Talk shortcut" — DISPLAY ONLY: fixed `⌃` `⌥` keycap chips (reuse the Home shortcuts keycap style) with caption "hold to talk". NOT a recorder — the monitor hard-watches ⌃⌥ in v1, so showing a recorder would lie about configurability.
 - Load initial `@State` values in `.onAppear` from `KeychainStore.get(...)`, showing a masked placeholder (e.g. `"sk-ant-••••" + String(key.suffix(4))`) rather than the real key.
 
 Add to `Sources/Models/Settings.swift`, following the existing `@Published`/`didSet`/init pattern exactly:
@@ -132,13 +132,11 @@ git commit -m "feat: keychain-backed API key settings and voice picker"
 
 **Interfaces produced:** `final class TalkHotkeyMonitor { static let shared; var onPress: (() -> Void)?; var onRelease: (() -> Void)?; func start() }`
 
-- [ ] **Step 1: Register a shortcut name** — in `Sources/Core/Hotkeys.swift`, inside the existing `extension KeyboardShortcuts.Name`, add:
-
-```swift
-    static let talk = Self("talk", default: .init(.space, modifiers: [.control, .option]))
-```
-
-(The recorder row shows this in Settings; the monitor below watches the modifier-only hold, which `KeyboardShortcuts` cannot express.)
+- [ ] **Step 1: No KeyboardShortcuts registration.** The talk trigger is a
+  modifier-only hold (`⌃⌥`), which the KeyboardShortcuts package cannot
+  express — do NOT add a `.talk` name or recorder (a recorder that the
+  monitor ignores would be a lie in the UI). The combo is a constant in
+  `TalkHotkeyMonitor`; making it configurable is a future task.
 
 - [ ] **Step 2: Create the monitor** — a listen-only CGEvent tap on `.flagsChanged`, firing `onPress` when BOTH control and option are down and `onRelease` when either lifts. (Pattern reference: `/tmp/clicky-refs/farzaa-clicky/leanring-buddy/GlobalPushToTalkShortcutMonitor.swift`.)
 
@@ -256,7 +254,7 @@ struct CircleOverlayView: View {
 }
 ```
 
-- [ ] **Step 2: Controller** — one borderless transparent panel per screen at `.screenSaver` level, `ignoresMouseEvents = true` (we sample the mouse, we don't intercept it — the user can still click through). A 60fps timer samples `NSEvent.mouseLocation` while active and appends to the stroke of whichever screen contains the cursor.
+- [ ] **Step 2: Controller** — one borderless transparent panel per screen at `.screenSaver` level. **While active (`begin()`…`end()`), `ignoresMouseEvents = false`** so the user's drag DRAWS instead of also selecting/dragging content in the app underneath; after `end()` set it back to `true` (click-through when dormant). The panels never become key or main (`canBecomeKey = false`) so focus stays with the user's app. A 60fps timer samples `NSEvent.mouseLocation` while active — only append points while the primary mouse button is down (`NSEvent.pressedMouseButtons & 1 != 0`), so hovering without clicking draws nothing — appending to the stroke of whichever screen contains the cursor.
 
 Key requirements the implementer must satisfy:
 - Panels created ONCE at `begin()` if absent, reused after (same pre-warm principle as the menu panel); hidden on `end()`, never destroyed.
