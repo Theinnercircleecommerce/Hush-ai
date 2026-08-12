@@ -753,7 +753,7 @@ struct NudgeMenuView: View {
                 // A wall of $0.00 reads like the feature is broken. Say why
                 // it's empty instead.
                 if usage.isEmpty {
-                    Text("Nothing spent yet. Dictation runs on your Mac and is free — cost only starts when you hold ⌃⌥ to ask about your screen.")
+                    Text("Nothing spent yet. Dictation runs on your Mac and is free — cost only starts when you hold \(TalkCombo.named(settings.talkCombo).symbols.joined()) to ask about your screen.")
                         .font(.system(size: 10))
                         .foregroundColor(Color(red: 0.40, green: 0.40, blue: 0.42))
                         .fixedSize(horizontal: false, vertical: true)
@@ -846,6 +846,24 @@ struct NudgeMenuView: View {
     private let soundOptions = ["None", "Basso", "Blow", "Bottle", "Frog", "Funk",
                                 "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
                                 "Sosumi", "Submarine", "Tink"]
+
+    /// Sound picker that previews the chosen cue — used by both the Talk and
+    /// Dictate sound sections.
+    private func soundPickerRow(icon: String,
+                                title: String,
+                                selection: Binding<String>) -> some View {
+        settingsRow(icon: icon, title: title) {
+            Picker("", selection: selection) {
+                ForEach(soundOptions, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 130)
+            .colorScheme(.dark)
+            .onChange(of: selection.wrappedValue) { val in
+                if val != "None" { NSSound(named: val)?.play() }
+            }
+        }
+    }
 
     // API key field state — never holds the real secret; loaded as empty,
     // placeholder shows the masked suffix when a key exists.
@@ -964,32 +982,29 @@ struct NudgeMenuView: View {
                     }
                 }
 
-                // SOUND
-                settingsSection(title: "SOUND") {
+                // SOUND — Talk and Dictate each get their own pair, so the two
+                // modes are audibly distinguishable while held.
+                settingsSection(title: "TALK SOUNDS") {
                     VStack(spacing: 0) {
-                        settingsRow(icon: "speaker.wave.1", title: "Start Sound") {
-                            Picker("", selection: $settings.startSound) {
-                                ForEach(soundOptions, id: \.self) { Text($0).tag($0) }
-                            }
-                            .pickerStyle(.menu)
-                            .frame(width: 130)
-                            .colorScheme(.dark)
-                            .onChange(of: settings.startSound) { val in
-                                if val != "None" { NSSound(named: val)?.play() }
-                            }
-                        }
+                        soundPickerRow(icon: "speaker.wave.1",
+                                       title: "Start Sound",
+                                       selection: $settings.talkStartSound)
                         rowDivider
-                        settingsRow(icon: "speaker.wave.3", title: "Stop Sound") {
-                            Picker("", selection: $settings.stopSound) {
-                                ForEach(soundOptions, id: \.self) { Text($0).tag($0) }
-                            }
-                            .pickerStyle(.menu)
-                            .frame(width: 130)
-                            .colorScheme(.dark)
-                            .onChange(of: settings.stopSound) { val in
-                                if val != "None" { NSSound(named: val)?.play() }
-                            }
-                        }
+                        soundPickerRow(icon: "speaker.wave.3",
+                                       title: "Stop Sound",
+                                       selection: $settings.talkStopSound)
+                    }
+                }
+
+                settingsSection(title: "DICTATE SOUNDS") {
+                    VStack(spacing: 0) {
+                        soundPickerRow(icon: "speaker.wave.1",
+                                       title: "Start Sound",
+                                       selection: $settings.startSound)
+                        rowDivider
+                        soundPickerRow(icon: "speaker.wave.3",
+                                       title: "Stop Sound",
+                                       selection: $settings.stopSound)
                     }
                 }
 

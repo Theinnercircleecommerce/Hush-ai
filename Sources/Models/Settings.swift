@@ -78,6 +78,13 @@ class AppSettings: ObservableObject {
     @Published var stopSound: String {
         didSet { UserDefaults.standard.set(stopSound, forKey: "stopSound") }
     }
+    /// Talk gets its own pair so the two modes are audibly distinguishable.
+    @Published var talkStartSound: String {
+        didSet { UserDefaults.standard.set(talkStartSound, forKey: "talkStartSound") }
+    }
+    @Published var talkStopSound: String {
+        didSet { UserDefaults.standard.set(talkStopSound, forKey: "talkStopSound") }
+    }
     
     @Published var whisperKitModelSize: String {
         didSet { UserDefaults.standard.set(whisperKitModelSize, forKey: "whisperKitModelSize") }
@@ -142,6 +149,8 @@ class AppSettings: ObservableObject {
         self.scratchpadText = defaults.string(forKey: "scratchpadText") ?? ""
         self.startSound = defaults.string(forKey: "startSound") ?? "Ping"
         self.stopSound = defaults.string(forKey: "stopSound") ?? "Pop"
+        self.talkStartSound = defaults.string(forKey: "talkStartSound") ?? "Tink"
+        self.talkStopSound = defaults.string(forKey: "talkStopSound") ?? "Bottle"
         self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
         self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "alloy"

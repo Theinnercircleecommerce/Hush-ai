@@ -149,6 +149,7 @@ final class TalkSession {
         isHolding = true
         startHoldWatchdog()
         appState.hudState = .recording
+        playCue(AppSettings.shared.talkStartSound)
         TalkHotkeyMonitor.diag("SESSION begin — listening")
     }
 
@@ -171,6 +172,7 @@ final class TalkSession {
         // is allowed to sit above this.
         let region = CircleOverlayController.shared.end()
         let recording = appState?.audioService.stopRecording()
+        playCue(AppSettings.shared.talkStopSound)
 
         guard let appState = appState else {
             isBusy = false
@@ -352,6 +354,13 @@ final class TalkSession {
         holdWatchdog = timer
     }
 
+    /// Talk's own press/release cues, separate from dictation's pair so the two
+    /// modes are audibly distinguishable.
+    private func playCue(_ name: String) {
+        guard name != "None" else { return }
+        NSSound(named: name)?.play()
+    }
+
     private func stopHoldWatchdog() {
         holdWatchdog?.invalidate()
         holdWatchdog = nil
@@ -363,7 +372,8 @@ final class TalkSession {
             stopHoldWatchdog()
             return
         }
-        guard !NSEvent.modifierFlags.contains([.control, .option]) else {
+        let talkFlags = TalkCombo.named(AppSettings.shared.talkCombo).flags
+        guard !NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: talkFlags) else {
             modifiersAbsentTicks = 0
             return
         }

@@ -208,7 +208,8 @@ final class CircleOverlayController {
         // anywhere. But healing on the FIRST absent tick would steal the
         // session from the normal release path, which always arrives a
         // little later; hence the grace run. See `selfHealGraceTicks`.
-        if NSEvent.modifierFlags.contains([.control, .option]) {
+        let talkFlags = TalkCombo.named(AppSettings.shared.talkCombo).flags
+        if NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: talkFlags) {
             modifiersAbsentTicks = 0
         } else {
             modifiersAbsentTicks += 1
