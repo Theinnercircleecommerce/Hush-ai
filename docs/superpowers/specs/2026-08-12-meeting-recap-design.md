@@ -16,7 +16,7 @@ Alternatives).
 
 ## User flow
 
-1. Owner joins a Meet call and turns on Meet's live captions.
+1. Owner joins a Meet call. **No setup step — no captions to turn on.**
 2. Owner opens the notch menu and clicks the yellow **Record Call** pill.
 3. Pill turns red and shows an elapsed timer. The panel can be closed; recording
    continues.
@@ -58,21 +58,34 @@ broken recording before (commit 896e82f), so it is off limits.
 
 ### 2. `SpeakerNameReader`
 
-**Does:** Turns a stream of screen frames into a timeline of
-`(timestamp, speakerName)`.
+**Does:** Turns a stream of screen frames into the meeting's participant names,
+and — only when it can — a `(timestamp, speakerName)` timeline.
 
 **How:** For each frame, run `VNRecognizeTextRequest` (Vision framework,
-on-device, free, no dependency) over the bottom-centre region of the frame where
-Meet renders captions. Meet formats captions as `Name: spoken text`. Extract the
-substring before the first colon. Emit `SpeakerTick(t: TimeInterval, name:
-String)` when the name changes.
+on-device, free, no dependency) over the whole frame. Two sources, in priority
+order:
+
+1. **Participant tile labels — the primary, zero-setup source.** Meet prints
+   each person's name on their video tile, always, with no setup. Text passing
+   `ParticipantNameFilter.isPlausibleName` (short, capitalised, letter-led, not
+   one of Meet's known UI strings, seen in ≥3 frames) is collected as a
+   participant.
+2. **Caption lines, if the user happens to have captions on.** Parsed as
+   `Name: spoken text` in the bottom-centre strip; emits
+   `SpeakerTick(t:name:)` on speaker change, giving exact per-line attribution.
+   **A bonus, never a requirement.**
+
+**Why not require captions:** it is a setup step the owner must remember every
+single call, and forgetting it silently degrades the result. The whole point of
+this feature is join → click → done. Attribution quality is worth less than
+zero friction.
+
+**Without ticks** (the normal case), `TranscriptMerger` labels all remote speech
+`"Someone else"` and the recap prompt attributes it from context using the
+participant list — who gets addressed by name, who answers, who owns the topic.
+The prompt is explicitly forbidden from inventing a name not in that list.
 
 **Cost:** $0. No image is ever sent to an API.
-
-**Fallback (captions off, or Meet redesigns):** OCR the participant tiles once at
-the start of the recording to collect a name list. Emit no ticks. The recap
-prompt then receives the name list and infers ownership from context ("Sarah,
-can you send the deck?"). Degraded but useful; costs nothing extra.
 
 **Frames are never persisted and never sent anywhere.** OCR runs in memory and
 the frame is dropped.
@@ -213,7 +226,8 @@ but **out of scope** for this phase.
 | Situation | Behaviour |
 |---|---|
 | Screen Recording permission revoked | Pill shows an error; mic-only recording is not attempted (a one-sided transcript is worse than none) |
-| Captions off / no Meet window | Falls back to the participant name list; if that also fails, everyone but the owner is `"Someone else"` |
+| No captions (the normal case) | Participant names come off the tiles; remote speech is `"Someone else"` in the raw transcript and attributed by the recap prompt from context |
+| No names detected at all (Meet redesign, unusual layout) | Still records, transcribes, and recaps; owner's own lines stay correct, remote speech is `"Someone else"` throughout |
 | Meeting under 30s | Discarded silently, no API call |
 | Claude call fails | Row saved with transcript, `recapFailed = true`, Retry button in the detail view |
 | Disk fills mid-recording | Stop, keep what was written, transcribe it |
@@ -226,14 +240,18 @@ but **out of scope** for this phase.
 **Unit (XCTest):**
 - `TranscriptMerger` — midpoint attribution, tick gaps, empty timeline,
   overlapping mic and system segments, ordering.
+- `ParticipantNameFilter` — real display names accepted; Meet UI chrome, the
+  owner's own "You" tile, digits, lowercase body text, and punctuation-heavy
+  labels all rejected.
 - `SpeakerNameReader` caption parsing — `Name: text`, names containing colons,
   no colon, empty OCR result.
 - `MeetingRecapService` response parsing — clean JSON, fenced JSON, missing
   keys, empty action items.
 
 **Manual QA (owner):**
-- Real 3-person Meet call, captions on → correct names on the transcript.
-- Same call, captions off → falls back without crashing.
+- Real 3-person Meet call, **no captions, no setup of any kind** → participant
+  names detected off the tiles, action items attributed to the right people.
+- Same call with captions on → per-line attribution is exact.
 - Close the notch panel mid-recording → recording continues.
 - Check Usage & cost shows the recap call.
 - Confirm `me.caf` and `them.caf` are gone after processing.
