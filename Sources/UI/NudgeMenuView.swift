@@ -1,5 +1,6 @@
 import SwiftUI
 import KeyboardShortcuts
+import CoreAudio
 
 struct HotkeyString {
     static var current: String {
@@ -11,7 +12,7 @@ struct HotkeyString {
 }
 
 enum NudgePage: Equatable {
-    case home, agents, settings, history, insights, scratchpad
+    case home, agents, settings, history, insights, usage, scratchpad
 
     var title: String {
         switch self {
@@ -20,6 +21,7 @@ enum NudgePage: Equatable {
         case .settings: return "Settings"
         case .history: return "History"
         case .insights: return "Insights"
+        case .usage: return "Usage"
         case .scratchpad: return "Scratchpad"
         }
     }
@@ -48,6 +50,7 @@ struct NudgeMenuView: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var history = HistoryStore.shared
+    @ObservedObject private var usage = UsageStore.shared
     @State private var page: NudgePage = .home
     @State private var expanded = false
     @State private var collapsedSize = CGSize(width: 260, height: 16)
@@ -69,6 +72,7 @@ struct NudgeMenuView: View {
                     pageLayer(settingsView, for: .settings)
                     pageLayer(historyView, for: .history)
                     pageLayer(insightsView, for: .insights)
+                    pageLayer(usageView, for: .usage)
                     pageLayer(scratchpadView, for: .scratchpad)
                 }
                 .animation(.easeOut(duration: 0.18), value: page)
@@ -219,7 +223,7 @@ struct NudgeMenuView: View {
         // Keys use word-style chips: symbol + word (e.g. "^ control") as separate
         // strings that hotkeyKeycapView renders as a single chip each.
         [
-            ShortcutEntry(name: "Talk",       keys: ["⌃", "⌥"],
+            ShortcutEntry(name: "Talk",       keys: TalkCombo.named(settings.talkCombo).symbols,
                           subtitle: "hold and speak", enabled: true),
             ShortcutEntry(name: "Text",       keys: [],
                           subtitle: nil, enabled: false),
@@ -694,6 +698,128 @@ struct NudgeMenuView: View {
         )
     }
 
+    // MARK: - Usage & cost
+
+    /// Sub-cent amounts get three decimals so a cheap day doesn't collapse to
+    /// "$0.00" and read as free.
+    private func money(_ value: Double) -> String {
+        if value > 0 && value < 0.01 {
+            return String(format: "$%.3f", value)
+        }
+        return String(format: "$%.2f", value)
+    }
+
+    /// Voice cost is derived from audio length, not billed usage — the `≈`
+    /// carries that everywhere it's shown.
+    private func splitLine(claude: Double, tts: Double) -> String {
+        "Claude \(money(claude)) · Voice ≈\(money(tts))"
+    }
+
+    private var usageView: some View {
+        let month = usage.thisMonth
+        let today = usage.today
+        let average = usage.averagePerQuestionThisMonth
+
+        return ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                costCard(title: "THIS MONTH", totals: month)
+                costCard(title: "TODAY", totals: today)
+
+                if month.questions > 0 {
+                    Text("\(month.questions) question\(month.questions == 1 ? "" : "s") this month · avg \(money(average)) each")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                        .padding(.leading, 4)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LAST \(UsageStore.listedDays) DAYS")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+                        .padding(.leading, 4)
+
+                    VStack(spacing: 0) {
+                        ForEach(Array(usage.dailyBreakdown.enumerated()), id: \.element.id) { index, day in
+                            if index > 0 { rowDivider }
+                            dailyCostRow(day)
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+                    )
+                }
+
+                // A wall of $0.00 reads like the feature is broken. Say why
+                // it's empty instead.
+                if usage.isEmpty {
+                    Text("Nothing spent yet. Dictation runs on your Mac and is free — cost only starts when you hold ⌃⌥ to ask about your screen.")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(red: 0.40, green: 0.40, blue: 0.42))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                } else {
+                    Text("Claude figures are exact token counts. Voice is estimated from audio length, so expect it to run within ~15% of your OpenAI bill. Dictation and cleanup run on your Mac and are free.")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(red: 0.40, green: 0.40, blue: 0.42))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func costCard(title: String, totals: CostTotals) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(red: 0.45, green: 0.45, blue: 0.45))
+            Text(money(totals.total))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            Text(splitLine(claude: totals.claude, tts: totals.tts))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+        )
+    }
+
+    private func dailyCostRow(_ day: DailyCost) -> some View {
+        HStack(spacing: 10) {
+            Text(day.date, format: .dateTime.month(.abbreviated).day())
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(day.total > 0 ? .white : .gray)
+                .frame(width: 52, alignment: .leading)
+
+            if day.total > 0 {
+                Text(splitLine(claude: day.claude, tts: day.tts))
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+            } else {
+                Text("no spend")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(red: 0.35, green: 0.35, blue: 0.37))
+            }
+
+            Spacer()
+
+            Text(money(day.total))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundColor(day.total > 0 ? .white : Color(red: 0.35, green: 0.35, blue: 0.37))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+
     private var scratchpadView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Quick notes. Saved automatically as you type.")
@@ -817,9 +943,24 @@ struct NudgeMenuView: View {
 
                 // SHORTCUTS
                 settingsSection(title: "SHORTCUTS") {
-                    settingsRow(icon: "keyboard", title: "Dictate") {
-                        KeyboardShortcuts.Recorder(for: .toggleRecord)
+                    VStack(spacing: 0) {
+                        settingsRow(icon: "hand.draw",
+                                    title: "Talk",
+                                    subtitle: "Hold the combo and speak.") {
+                            Picker("", selection: $settings.talkCombo) {
+                                ForEach(TalkCombo.all) { combo in
+                                    Text(combo.label).tag(combo.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 170)
                             .colorScheme(.dark)
+                        }
+                        rowDivider
+                        settingsRow(icon: "keyboard", title: "Dictate") {
+                            KeyboardShortcuts.Recorder(for: .toggleRecord)
+                                .colorScheme(.dark)
+                        }
                     }
                 }
 
@@ -923,26 +1064,6 @@ struct NudgeMenuView: View {
                                 .toggleStyle(.switch)
                                 .labelsHidden()
                         }
-                        rowDivider
-                        settingsRow(icon: "hand.draw", title: "Talk shortcut") {
-                            HStack(spacing: 3) {
-                                ForEach(["⌃", "⌥"], id: \.self) { key in
-                                    Text(key)
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(Color(red: 0.80, green: 0.80, blue: 0.82))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                                .fill(Color(red: 0.20, green: 0.20, blue: 0.22))
-                                        )
-                                }
-                                Text("hold to talk")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.gray)
-                                    .padding(.leading, 4)
-                            }
-                        }
                     }
                 }
 
@@ -981,6 +1102,8 @@ struct NudgeMenuView: View {
                         navRow(icon: "clock", title: "History", page: .history)
                         rowDivider
                         navRow(icon: "chart.bar", title: "Insights", page: .insights)
+                        rowDivider
+                        navRow(icon: "dollarsign.circle", title: "Usage & cost", page: .usage)
                         rowDivider
                         navRow(icon: "note.text", title: "Scratchpad", page: .scratchpad)
                     }
@@ -1096,6 +1219,11 @@ struct NudgeMenuView: View {
 private struct MicrophonePickerRow: View {
     @Binding var selectedID: String
     @State private var devices: [MicrophoneDevice] = []
+    // The menu panel is built once at launch and every page stays mounted
+    // (pageLayer hides with opacity), so onAppear fires exactly ONCE. Without
+    // this CoreAudio listener the list stays frozen at whatever was plugged in
+    // when Hush started, and earbuds connected later never appear.
+    @State private var deviceWatcher: AudioObjectPropertyListenerBlock?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -1112,6 +1240,11 @@ private struct MicrophonePickerRow: View {
                 ForEach(devices) { device in
                     Text(device.name).tag(device.id)
                 }
+                // A saved device that's currently unplugged still needs a tag,
+                // otherwise the Picker renders blank instead of the choice.
+                if !selectedID.isEmpty, !devices.contains(where: { $0.id == selectedID }) {
+                    Text("Not connected").tag(selectedID)
+                }
             }
             .pickerStyle(.menu)
             .frame(maxWidth: 180)
@@ -1121,6 +1254,16 @@ private struct MicrophonePickerRow: View {
         .padding(.vertical, 11)
         .onAppear {
             devices = AudioCaptureService.availableMicrophones()
+            guard deviceWatcher == nil else { return }
+            deviceWatcher = AudioCaptureService.watchDevices {
+                devices = AudioCaptureService.availableMicrophones()
+            }
+        }
+        .onDisappear {
+            if let watcher = deviceWatcher {
+                AudioCaptureService.stopWatchingDevices(watcher)
+                deviceWatcher = nil
+            }
         }
     }
 }

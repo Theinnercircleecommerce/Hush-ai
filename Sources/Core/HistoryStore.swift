@@ -47,6 +47,24 @@ class HistoryStore: ObservableObject {
                 }
             }
             
+            // Per-call spend on the paid APIs. Counts and money only — no
+            // prompt, transcript, or answer text. See UsageStore.
+            migrator.registerMigration("v3") { db in
+                try db.create(table: "usageEvent") { t in
+                    t.column("id", .text).primaryKey()
+                    t.column("timestamp", .datetime).notNull()
+                    t.column("provider", .text).notNull()
+                    t.column("model", .text).notNull()
+                    t.column("inputTokens", .integer).notNull()
+                    t.column("outputTokens", .integer).notNull()
+                    t.column("costUSD", .double).notNull()
+                    t.column("isEstimate", .boolean).notNull()
+                }
+                try db.create(index: "usageEvent_on_timestamp",
+                              on: "usageEvent",
+                              columns: ["timestamp"])
+            }
+
             try migrator.migrate(dbQueue)
             
             refresh()

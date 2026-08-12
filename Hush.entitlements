@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hush is NOT sandboxed: Accessibility and global event monitors are
+	     impossible inside the sandbox, and Developer ID distribution doesn't
+	     require it. Only hardened-runtime resource access is declared here.
+
+	     Microphone: required under the hardened runtime. Without it the mic
+	     opens but delivers silence.
+	     Screen Recording and Accessibility are TCC-gated, not entitlement-gated,
+	     so they need no entry here — only the Info.plist usage strings. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

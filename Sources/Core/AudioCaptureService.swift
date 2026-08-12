@@ -8,6 +8,9 @@ class AudioCaptureService: NSObject, ObservableObject {
     // after stop()/dealloc; destroying the engine reliably drops it.
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
+    /// Envelope follower state for the HUD level. Touched only on the audio
+    /// tap thread while recording, and reset on the main thread between takes.
+    private var smoothedLevel: Float = 0
 
     @Published var isRecording = false
     @Published var audioLevel: Float = 0.0
@@ -32,6 +35,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         let fileURL = tempDir.appendingPathComponent(fileName)
         self.currentFileURL = fileURL
 
+        smoothedLevel = 0
         let engine = AVAudioEngine()
         applySelectedMicrophone(to: engine)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
@@ -53,7 +57,17 @@ class AudioCaptureService: NSObject, ObservableObject {
             }
             let rms = sqrt(sum / Float(frameCount))
             let db = 20 * log10(max(rms, 0.000_000_1))
-            let level = max(0.0, min(1.0, (db + 50) / 50))
+            // Normal speech on a laptop or earbud mic lands around -48…-15 dBFS.
+            // The old -50…0 mapping squeezed all of that into the bottom third of
+            // the range, so levels 0.0 / 0.12 / 0.20 drew IDENTICAL bars and the
+            // HUD looked frozen while talking. Map the range people actually
+            // speak in instead.
+            let raw = max(0.0, min(1.0, (db + 52) / 37))
+            // Fast attack, slow release: bars snap up on a syllable and glide
+            // back instead of strobing at buffer rate (~47 updates/sec).
+            let follow: Float = raw > self.smoothedLevel ? 0.6 : 0.15
+            self.smoothedLevel += (raw - self.smoothedLevel) * follow
+            let level = self.smoothedLevel
             DispatchQueue.main.async {
                 self.audioLevel = level
             }
@@ -81,6 +95,7 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         isRecording = false
         audioLevel = 0.0
+        smoothedLevel = 0
 
         return (url, duration)
     }
@@ -103,6 +118,33 @@ extension AudioCaptureService {
         return session.devices.map {
             MicrophoneDevice(id: $0.uniqueID, name: $0.localizedName)
         }
+    }
+
+    /// Fires `handler` on the main queue whenever a device is plugged in,
+    /// unplugged, or a Bluetooth set connects/disconnects. Returns a token the
+    /// caller must hand back to `stopWatchingDevices` to unregister.
+    static func watchDevices(_ handler: @escaping () -> Void) -> AudioObjectPropertyListenerBlock {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let block: AudioObjectPropertyListenerBlock = { _, _ in handler() }
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, DispatchQueue.main, block
+        )
+        return block
+    }
+
+    static func stopWatchingDevices(_ block: @escaping AudioObjectPropertyListenerBlock) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, DispatchQueue.main, block
+        )
     }
 
     /// Translates a CoreAudio UID string to an AudioDeviceID.

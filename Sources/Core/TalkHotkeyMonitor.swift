@@ -61,7 +61,10 @@ final class TalkHotkeyMonitor {
     }
 
     private func handle(flags: NSEvent.ModifierFlags) {
-        let held = flags.contains(.control) && flags.contains(.option)
+        // Read the combo live so a settings change takes effect immediately —
+        // the monitors themselves are combo-agnostic, nothing to reinstall.
+        let required = TalkCombo.named(AppSettings.shared.talkCombo).flags
+        let held = flags.intersection(.deviceIndependentFlagsMask).isSuperset(of: required)
         if held, !isDown {
             isDown = true
             DispatchQueue.main.async { [weak self] in self?.onPress?() }

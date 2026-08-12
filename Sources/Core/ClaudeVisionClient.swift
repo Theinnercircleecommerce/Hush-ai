@@ -187,6 +187,18 @@ final class ClaudeVisionClient {
         }
 
         var answer = ""
+        // Anthropic bills for whatever it streamed, so these are recorded on
+        // every exit path — including a mid-stream failure. `defer` runs before
+        // the throw propagates.
+        var inputTokens = 0
+        var outputTokens = 0
+        defer {
+            UsageStore.shared.recordClaude(
+                model: Claude.model,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens
+            )
+        }
         do {
             // `.lines` buffers across chunk boundaries, so a delta split mid-line
             // by the network is reassembled before we ever see it.
@@ -194,10 +206,20 @@ final class ClaudeVisionClient {
                 // Throws on a mid-stream `error` event — a 200 response can still
                 // fail partway through, and we must not treat the partial text as
                 // a complete answer.
-                guard let text = try textDelta(fromSSELine: line), !text.isEmpty else { continue }
-                answer += text
-                // Already on the main actor, i.e. the main queue.
-                onChunk(text)
+                switch try streamEvent(fromSSELine: line) {
+                case .text(let text):
+                    guard !text.isEmpty else { continue }
+                    answer += text
+                    // Already on the main actor, i.e. the main queue.
+                    onChunk(text)
+                case .inputTokens(let count):
+                    inputTokens = count
+                case .outputTokens(let count):
+                    // Cumulative for the message — the last one wins.
+                    outputTokens = count
+                case .none:
+                    continue
+                }
             }
         } catch let error as ClaudeError {
             throw error
@@ -214,46 +236,75 @@ final class ClaudeVisionClient {
 
     // MARK: - SSE parsing
 
-    /// Extracts `delta.text` from one Server-Sent Events line, or nil if the
-    /// line isn't a text delta.
+    /// The only things we take off the stream: answer text, and the token
+    /// counts that tell us what the question cost.
+    private enum StreamEvent {
+        case text(String)
+        /// From `message_start`. Sent once, before any text.
+        case inputTokens(Int)
+        /// From `message_delta`. Cumulative for the message so far.
+        case outputTokens(Int)
+        /// A line we don't care about.
+        case none
+    }
+
+    /// Parses one Server-Sent Events line.
     ///
     /// Tolerates everything the wire can throw at us: blank lines, `event:` /
     /// `id:` / `retry:` fields, `:` heartbeat comments, the optional
     /// `data: [DONE]` sentinel, non-JSON payloads, and any event type we don't
-    /// care about (`message_start`, `content_block_start`, `ping`,
-    /// `message_delta`, `message_stop`).
+    /// care about (`content_block_start`, `ping`, `message_stop`).
     ///
     /// - Throws: `ClaudeError.http` when the stream carries an `error` event.
     ///   The API can fail *after* a 200 — overload, an inference error — and
     ///   silently returning the partial text would speak half a sentence and
     ///   then record that fragment as a completed turn.
-    private nonisolated func textDelta(fromSSELine line: String) throws -> String? {
-        guard line.hasPrefix("data:") else { return nil }
+    private nonisolated func streamEvent(fromSSELine line: String) throws -> StreamEvent {
+        guard line.hasPrefix("data:") else { return .none }
 
         let payload = line.dropFirst("data:".count)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !payload.isEmpty, payload != "[DONE]" else { return nil }
+        guard !payload.isEmpty, payload != "[DONE]" else { return .none }
 
         guard let data = payload.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = object["type"] as? String
-        else { return nil }
+        else { return .none }
 
-        if type == "error" {
+        switch type {
+        case "error":
             let error = object["error"] as? [String: Any]
             let kind = error?["type"] as? String ?? "api_error"
             let message = error?["message"] as? String ?? kind
             // 529 is what an overload would have been had it arrived as a
             // status code; anything else maps to a generic server error.
             throw ClaudeError.http(kind == "overloaded_error" ? 529 : 500, message)
+
+        case "message_start":
+            // Prompt caching isn't used, so the `cache_*` usage fields are
+            // always zero and are deliberately ignored.
+            guard let message = object["message"] as? [String: Any],
+                  let usage = message["usage"] as? [String: Any],
+                  let input = usage["input_tokens"] as? Int
+            else { return .none }
+            return .inputTokens(input)
+
+        case "message_delta":
+            guard let usage = object["usage"] as? [String: Any],
+                  let output = usage["output_tokens"] as? Int
+            else { return .none }
+            return .outputTokens(output)
+
+        case "content_block_delta":
+            guard let delta = object["delta"] as? [String: Any],
+                  delta["type"] as? String == "text_delta",
+                  let text = delta["text"] as? String
+            else { return .none }
+            return .text(text)
+
+        default:
+            return .none
         }
-
-        guard type == "content_block_delta",
-              let delta = object["delta"] as? [String: Any],
-              delta["type"] as? String == "text_delta"
-        else { return nil }
-
-        return delta["text"] as? String
     }
 
     /// Drains a failed response's body for the error message. Capped so a

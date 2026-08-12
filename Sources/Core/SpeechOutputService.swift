@@ -28,6 +28,10 @@ final class SpeechOutputService: NSObject, ObservableObject {
 
     static let shared = SpeechOutputService()
 
+    /// Kept here (not inline in the request body) so usage rows and the
+    /// request always name the same model.
+    fileprivate static let ttsModel = "gpt-4o-mini-tts"
+
     @Published private(set) var isSpeaking: Bool = false
 
     /// True from the first `enqueue` until the queue fully drains — covers the
@@ -130,13 +134,16 @@ final class SpeechOutputService: NSObject, ObservableObject {
         // `current` holds the in-flight fetch for the segment we're about to
         // play; there is at most one such fetch running at a time (this one),
         // plus at most one prefetch we start right before blocking on playback.
-        var current: Task<Data, Error>? = fetchTask(text: pending.removeFirst(), voice: voice, apiKey: apiKey)
+        // The text rides along so playback can attribute the cost to it.
+        var current: (text: String, fetch: Task<Data, Error>)?
+        let firstSegment = pending.removeFirst()
+        current = (firstSegment, fetchTask(text: firstSegment, voice: voice, apiKey: apiKey))
 
-        while let fetch = current {
+        while let job = current {
             // Await this segment's audio.
             let data: Data
             do {
-                data = try await fetch.value
+                data = try await job.fetch.value
             } catch {
                 if generation != myGeneration { return }
                 TalkHotkeyMonitor.diag("SpeechOutputService: network error – \(error.localizedDescription)")
@@ -147,7 +154,8 @@ final class SpeechOutputService: NSObject, ObservableObject {
             // Start prefetching the NEXT segment before we block on playing
             // this one, so its audio is ready the moment this segment ends.
             if !pending.isEmpty {
-                current = fetchTask(text: pending.removeFirst(), voice: voice, apiKey: apiKey)
+                let next = pending.removeFirst()
+                current = (next, fetchTask(text: next, voice: voice, apiKey: apiKey))
             } else {
                 current = nil
             }
@@ -156,7 +164,7 @@ final class SpeechOutputService: NSObject, ObservableObject {
             // starting the next — this is what enforces strict order and
             // back-to-back playback.
             if !data.isEmpty {
-                await playAndWait(data, generation: myGeneration)
+                await playAndWait(data, text: job.text, generation: myGeneration)
                 if generation != myGeneration { return }
             }
         }
@@ -173,7 +181,7 @@ final class SpeechOutputService: NSObject, ObservableObject {
 
     /// Initialise the player, start playback, mark `isSpeaking`, and suspend
     /// until the delegate reports completion (or `stop()` releases us).
-    private func playAndWait(_ data: Data, generation myGeneration: Int) async {
+    private func playAndWait(_ data: Data, text: String, generation myGeneration: Int) async {
         do {
             let p = try AVAudioPlayer(data: data)
             p.delegate = self
@@ -186,6 +194,14 @@ final class SpeechOutputService: NSObject, ObservableObject {
                 return
             }
             isSpeaking = true
+            // The speech endpoint returns raw MP3 with no usage block, so the
+            // decoded audio length is our only handle on what it cost. Recorded
+            // here rather than at fetch time because `duration` needs a player.
+            UsageStore.shared.recordTTS(
+                model: Self.ttsModel,
+                characters: text.count,
+                audioSeconds: p.duration
+            )
         } catch {
             TalkHotkeyMonitor.diag("SpeechOutputService: AVAudioPlayer init failed – \(error.localizedDescription)")
             player = nil
@@ -244,7 +260,7 @@ final class SpeechOutputService: NSObject, ObservableObject {
         request.timeoutInterval = 20
 
         let body: [String: String] = [
-            "model": "gpt-4o-mini-tts",
+            "model": ttsModel,
             "voice": voice,
             "input": text,
             "response_format": "mp3"

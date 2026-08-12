@@ -77,7 +77,7 @@ struct NudgeView: View {
         ZStack {
             NudgeNotchShape(
                 topCornerRadius: metrics.hasNotch ? 8 : 0,
-                bottomCornerRadius: 14
+                bottomCornerRadius: metrics.expansionCornerRadius
             )
             .fill(Color.black)
 
@@ -96,7 +96,7 @@ struct NudgeView: View {
         .frame(width: expansionWidth, height: metrics.expansionHeight)
         .clipShape(NudgeNotchShape(
             topCornerRadius: metrics.hasNotch ? 8 : 0,
-            bottomCornerRadius: 14
+            bottomCornerRadius: metrics.expansionCornerRadius
         ))
     }
 
@@ -147,24 +147,34 @@ struct NudgeBarsView: View {
     var level: Float
     var color: Color
 
+    /// Per-bar response, tallest in the middle. Replaces the old linear
+    /// attenuation, which flattened the outer two bars almost to nothing.
+    private static let profile: [CGFloat] = [0.55, 0.82, 1.0, 0.82, 0.55]
+    private static let minHeight: CGFloat = 3
+    private static let maxTravel: CGFloat = 13
+
     var body: some View {
-        HStack(spacing: 2.5) {
+        HStack(spacing: 3) {
             ForEach(0..<5) { index in
                 Capsule()
                     .fill(color)
-                    .frame(width: 2.5, height: barHeight(index))
+                    // 3pt wide, not 2.5: a 2.5pt capsule has a 1.25pt corner
+                    // radius, which lands on a half pixel and renders as a
+                    // blurry, chunky stub instead of a clean rounded bar.
+                    .frame(width: 3, height: barHeight(index))
                     .animation(.spring(response: 0.15, dampingFraction: 0.6), value: level)
             }
         }
+        .frame(height: Self.minHeight + Self.maxTravel)
     }
 
     private func barHeight(_ index: Int) -> CGFloat {
-        let base: CGFloat = 3
-        let center: CGFloat = 2
-        let attenuation = max(0, 1.0 - abs(CGFloat(index) - center) * 0.3)
-        let active = max(CGFloat(level), 0.12)
-        let jitter = CGFloat.random(in: 0.85...1.15)
-        return min(base + active * 9 * attenuation * jitter, 12)
+        // Slight curve so quiet speech still visibly lifts the bars.
+        let shaped = pow(max(CGFloat(level), 0), 0.7)
+        let travel = shaped * Self.profile[index] * Self.maxTravel
+        // Snap to whole points: fractional heights get antialiased into soft
+        // grey edges, which is what read as "pixelated" on a 3pt-wide bar.
+        return Self.minHeight + travel.rounded()
     }
 }
 

@@ -59,7 +59,7 @@ final class NotchNudgeController {
             panels.append(panel)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let line = "NUDGE-GEO panel=\(NSStringFromRect(panel.frame)) screenMaxY=\(screen.frame.maxY) hostingSafeArea=\(hosting.safeAreaInsets) notchW=\(metrics.notchWidth) notchH=\(metrics.notchHeight)\n"
+                let line = "NUDGE-GEO panel=\(NSStringFromRect(panel.frame)) screenMaxY=\(screen.frame.maxY) hostingSafeArea=\(hosting.safeAreaInsets) notchW=\(metrics.notchWidth) notchH=\(metrics.notchHeight) menuBar=\(metrics.menuBarHeight) expansionH=\(metrics.expansionHeight)\n"
                 if let data = line.data(using: .utf8) {
                     let url = FileManager.default.temporaryDirectory
                         .appendingPathComponent("hush-nudge-geo.log")

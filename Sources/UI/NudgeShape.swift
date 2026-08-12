@@ -13,24 +13,54 @@ struct NotchMetrics {
     let hasNotch: Bool
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    /// Real menu bar thickness on this screen. On an external display this is
+    /// ~24pt, which is what the bar must not exceed — a taller bar overhangs
+    /// into whatever window is below (Chrome, Finder, …).
+    let menuBarHeight: CGFloat
 
     static func metrics(for screen: NSScreen) -> NotchMetrics {
+        let menuBar = menuBarHeight(for: screen)
         let topInset = screen.safeAreaInsets.top
         if topInset > 0,
            let left = screen.auxiliaryTopLeftArea,
            let right = screen.auxiliaryTopRightArea {
             let width = screen.frame.width - left.width - right.width
-            return NotchMetrics(hasNotch: true, notchWidth: width, notchHeight: topInset)
+            return NotchMetrics(
+                hasNotch: true,
+                notchWidth: width,
+                notchHeight: topInset,
+                menuBarHeight: menuBar
+            )
         }
         // Notchless display (external monitor / older Mac): the expansion
         // renders as a free-standing rounded bar of this virtual size.
-        return NotchMetrics(hasNotch: false, notchWidth: 180, notchHeight: 0)
+        return NotchMetrics(
+            hasNotch: false,
+            notchWidth: 180,
+            notchHeight: 0,
+            menuBarHeight: menuBar
+        )
     }
 
-    /// Height of the black expansion bar: flush with the hardware notch —
-    /// the active bar only grows sideways, never below the notch line.
+    /// frame.maxY - visibleFrame.maxY is the space the menu bar occupies.
+    /// Falls back to the status bar thickness when the menu bar auto-hides
+    /// (the gap is 0 then).
+    private static func menuBarHeight(for screen: NSScreen) -> CGFloat {
+        let gap = screen.frame.maxY - screen.visibleFrame.maxY
+        return gap > 1 ? gap : NSStatusBar.system.thickness
+    }
+
+    /// Height of the black expansion bar: flush with the hardware notch on a
+    /// notched Mac, flush with the menu bar everywhere else — the active bar
+    /// only grows sideways, never below the menu bar line.
     var expansionHeight: CGFloat {
-        hasNotch ? notchHeight + 1 : 36
+        hasNotch ? notchHeight + 1 : menuBarHeight
+    }
+
+    /// Bottom corners can't be rounder than half the bar's height, or the
+    /// silhouette collapses into a lozenge on a short (24pt) menu bar.
+    var expansionCornerRadius: CGFloat {
+        min(14, expansionHeight / 2)
     }
 }
 

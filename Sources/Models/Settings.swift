@@ -1,6 +1,32 @@
 import Foundation
 import SwiftUI
+import AppKit
 import Security
+
+// MARK: - Talk hold-to-talk combos
+
+/// Hold-to-talk is a modifier-only combo, which KeyboardShortcuts.Recorder
+/// cannot record. The user picks from this fixed list instead.
+struct TalkCombo: Identifiable {
+    let id: String
+    let label: String
+    let symbols: [String]
+    let flags: NSEvent.ModifierFlags
+
+    static let all: [TalkCombo] = [
+        TalkCombo(id: "control+option",  label: "⌃⌥  Control Option",  symbols: ["⌃", "⌥"], flags: [.control, .option]),
+        TalkCombo(id: "control+shift",   label: "⌃⇧  Control Shift",   symbols: ["⌃", "⇧"], flags: [.control, .shift]),
+        TalkCombo(id: "control+command", label: "⌃⌘  Control Command", symbols: ["⌃", "⌘"], flags: [.control, .command]),
+        TalkCombo(id: "option+shift",    label: "⌥⇧  Option Shift",    symbols: ["⌥", "⇧"], flags: [.option, .shift]),
+        TalkCombo(id: "command+option",  label: "⌘⌥  Command Option",  symbols: ["⌘", "⌥"], flags: [.command, .option]),
+        TalkCombo(id: "command+shift",   label: "⌘⇧  Command Shift",   symbols: ["⌘", "⇧"], flags: [.command, .shift]),
+        TalkCombo(id: "fn",              label: "fn  Globe",           symbols: ["fn"],     flags: [.function]),
+    ]
+
+    static func named(_ id: String) -> TalkCombo {
+        all.first { $0.id == id } ?? all[0]
+    }
+}
 
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -65,6 +91,10 @@ class AppSettings: ObservableObject {
     @Published var showAnswerBubble: Bool {
         didSet { UserDefaults.standard.set(showAnswerBubble, forKey: "showAnswerBubble") }
     }
+    /// TalkCombo.id for the hold-to-talk modifier combo.
+    @Published var talkCombo: String {
+        didSet { UserDefaults.standard.set(talkCombo, forKey: "talkCombo") }
+    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -117,5 +147,6 @@ class AppSettings: ObservableObject {
         self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "alloy"
         // Owner preference: voice-only by default; the written answer is opt-in.
         self.showAnswerBubble = defaults.object(forKey: "showAnswerBubble") as? Bool ?? false
+        self.talkCombo = defaults.string(forKey: "talkCombo") ?? "control+option"
     }
 }
