@@ -65,6 +65,12 @@ class HistoryStore: ObservableObject {
                               columns: ["timestamp"])
             }
 
+            // Phase 6: recorded meetings. Table shape lives in Meeting.swift
+            // so tests build the identical schema.
+            migrator.registerMigration("v4") { db in
+                try Meeting.createTable(db)
+            }
+
             try migrator.migrate(dbQueue)
             
             refresh()
