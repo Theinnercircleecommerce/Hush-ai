@@ -69,12 +69,19 @@ final class MeetingSession: ObservableObject {
         systemService.onFrame = { [weak self] pixelBuffer, t in
             self?.nameReader.process(pixelBuffer: pixelBuffer, at: t)
         }
-        // Read the window numbers HERE, on the main actor. Handing NSWindows
-        // to the nonisolated capture service made it touch AppKit off the
-        // main thread, which killed the app the instant Record Call was
-        // pressed — silently, with no crash report.
-        let hushWindowIDs = NSApp.windows.map { CGWindowID($0.windowNumber) }
-        TalkHotkeyMonitor.diag("MEETING start — \(hushWindowIDs.count) own windows excluded")
+        // `windowNumber` is an Int and macOS hands out NEGATIVE numbers for
+        // off-screen and system-owned windows — and `NSApp.windows` includes
+        // those, unlike the curated list ScreenCaptureService is given.
+        // `CGWindowID` is a UInt32, so a plain `CGWindowID(...)` conversion
+        // TRAPS on the first negative one ("Not enough bits to represent the
+        // passed value") and kills the app the instant Record Call is pressed.
+        // `init(exactly:)` returns nil there instead; a window we can't
+        // address by ID is one we simply don't exclude.
+        //
+        // Read on the main actor: NSWindow must not cross into the capture
+        // service, which is nonisolated and runs on background queues.
+        let hushWindowIDs = NSApp.windows.compactMap { CGWindowID(exactly: $0.windowNumber) }
+        TalkHotkeyMonitor.diag("MEETING start — \(hushWindowIDs.count)/\(NSApp.windows.count) own windows excluded")
         Task {
             do {
                 try await systemService.start(excludeWindowIDs: hushWindowIDs)

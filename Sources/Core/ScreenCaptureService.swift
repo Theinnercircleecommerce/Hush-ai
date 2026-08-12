@@ -61,7 +61,13 @@ enum ScreenCaptureService {
 
         // Map the passed NSWindows to SCWindows by windowID so we exclude
         // exactly Hush's own windows from the capture.
-        let excludeWindowIDs = Set(windows.map { CGWindowID($0.windowNumber) })
+        //
+        // `init(exactly:)`, not `CGWindowID(...)`: windowNumber is a signed Int
+        // and macOS hands out negative numbers for off-screen/system-owned
+        // windows, which trap when forced into UInt32. This caller passes a
+        // curated list so it has never bitten here — but the identical line
+        // crashed the meeting recorder on every press.
+        let excludeWindowIDs = Set(windows.compactMap { CGWindowID(exactly: $0.windowNumber) })
         let excludedSCWindows = content.windows.filter {
             excludeWindowIDs.contains($0.windowID)
         }
