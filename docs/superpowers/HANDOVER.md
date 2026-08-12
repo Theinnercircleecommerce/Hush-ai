@@ -21,6 +21,7 @@ stored in Keychain), NO backend, voice audio NEVER leaves the Mac
 | 3 | Text chat (double-tap ctrl): "ask Hush…" input with screen context; answer bubble near cursor (~340px, ~6s fade) | not started |
 | 4 | Cursor triangle companion (follows mouse, flies to [POINT:x,y:label] coords from Claude) | not started |
 | 5 | Agents (spawn local Claude Code CLI subprocess; Agents tab placeholder already in panel) | not started |
+| 6 | Meeting recap (local capture + on-device speaker names + Claude recap) | 🔨 BUILT — awaiting owner QA |
 | later | Realtime voice (OpenAI gpt-realtime, voice "cedar"), wake word | optional |
 
 Target hotkey map (mirrors HeyClicky): hold `ctrl+option` = talk/circle ·
@@ -115,6 +116,28 @@ still being spoken does stop the current playback (`begin()` calls
 `SpeechOutputService.stop()` and clears the bubble), but there is no smooth
 "interrupt and immediately re-listen" flow beyond that hard stop. Left as a
 future refinement.
+
+## Phase 6 — Meeting Recap (BUILT, AWAITING OWNER QA)
+
+All 10 tasks implemented and reviewed clean; the dev build compiles, signs,
+and launches cleanly (Task 10, 2026-08-12). Not yet exercised end-to-end on
+a real Meet call — that's the owner's manual QA pass, not automated.
+
+- Spec: `docs/superpowers/specs/2026-08-12-meeting-recap-design.md`
+- Plan: `docs/superpowers/plans/2026-08-12-meeting-recap.md`
+- What it does: local capture of a Meet call (system audio + own mic,
+  on-device Meet-caption OCR for speaker names), local WhisperKit
+  transcription, merge into attributed lines, one non-streaming Claude
+  recap call (summary + action items), stored in a v4 SQLite schema,
+  surfaced via a "Record Call" pill + LIBRARY → Meetings page.
+- Deliberate scope cuts (per spec): no hotkey, no auto-detect meeting
+  start, participant-tile OCR fallback deferred (captions-off degrades to
+  "Someone else" speaker labels with participants still listed in the
+  recap prompt).
+- Next: owner runs the 10-item QA checklist (Task 10 report,
+  `.superpowers/sdd/task-10-report.md`) against `./Hush.app` — real Meet
+  call, transcript/recap quality, usage-page cost row, temp-file cleanup,
+  and the <30s-discard path.
 
 ## Hard-won invariants — regressions here have burned us before
 
