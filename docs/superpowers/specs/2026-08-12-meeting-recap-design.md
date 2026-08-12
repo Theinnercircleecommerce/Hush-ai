@@ -100,6 +100,16 @@ the frame is dropped.
 
 **Guards:**
 - Re-entry guard — a second click while recording means *stop*, not *start*.
+- **Mic ownership.** There is exactly one `AudioCaptureService` instance
+  (`AppState.swift:10`) and three would-be users: Shift+A dictation
+  (`AppState.startRecording`), circle-to-ask (`TalkSession`, which calls
+  `appState.audioService.stopRecording()` on cancel — it would silently end a
+  meeting's mic file), and now `MeetingSession`. Rule for v1: **while a meeting
+  is recording, dictation and circle-to-ask are blocked** with a brief HUD
+  message ("recording a meeting"). Both existing callers already guard on
+  `audioService.isRecording` (`AppState.swift:44`, `TalkSession.swift:124`);
+  `MeetingSession` adds the same check before starting, and a
+  `meetingActive` flag makes the block explicit in the other direction.
 - Meetings under 30 seconds are discarded without an API call.
 - If the Claude call fails, the row is still saved with the transcript and a
   `recapFailed` flag. The Meetings view offers a Retry button; retry costs one
@@ -209,6 +219,7 @@ but **out of scope** for this phase.
 | Disk fills mid-recording | Stop, keep what was written, transcribe it |
 | Mac sleeps mid-call | Recording ends; whatever was captured is processed |
 | Second click while recording | Stops. Never starts a second session. |
+| Shift+A or circle-to-ask during a meeting | Blocked with a HUD message; the meeting recording is untouched |
 
 ## Testing
 
