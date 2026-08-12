@@ -336,6 +336,13 @@ struct NudgeMenuView: View {
                                     .controlSize(.small)
                                 Text("Processing…")
                                     .font(.system(size: 12, weight: .semibold))
+                            case .failed(let msg):
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text(msg)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                             default:
                                 Image(systemName: "record.circle")
                                     .font(.system(size: 10, weight: .semibold))
@@ -1270,13 +1277,14 @@ struct NudgeMenuView: View {
         switch meeting.state {
         case .recording: return Color(red: 0.85, green: 0.20, blue: 0.18)
         case .processing: return Color(red: 0.20, green: 0.20, blue: 0.22)
+        case .failed: return Color(red: 0.55, green: 0.16, blue: 0.14)
         default: return Color(red: 0.98, green: 0.80, blue: 0.10)
         }
     }
 
     private var recordPillForeground: Color {
         switch meeting.state {
-        case .recording, .processing: return .white
+        case .recording, .processing, .failed: return .white
         default: return Color(red: 0.10, green: 0.10, blue: 0.10)
         }
     }

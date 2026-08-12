@@ -78,7 +78,19 @@ final class MeetingSession: ObservableObject {
                 _ = await systemService.stop()
                 _ = micService.stopRecording()
                 state = .failed(error.localizedDescription)
+                scheduleFailureClear()
             }
+        }
+    }
+
+    /// Auto-reverts a `.failed` state back to `.idle` after the owner has had
+    /// a moment to read the message — same pattern as AppState's `.error`
+    /// HUD state. Guards against clobbering a state change that happened in
+    /// the meantime.
+    private func scheduleFailureClear() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self, case .failed = self.state else { return }
+            self.state = .idle
         }
     }
 
@@ -139,6 +151,7 @@ final class MeetingSession: ObservableObject {
                 state = .idle
             } catch {
                 state = .failed(error.localizedDescription)
+                scheduleFailureClear()
             }
         }
     }
