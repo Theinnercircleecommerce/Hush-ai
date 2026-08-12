@@ -90,12 +90,14 @@ the frame is dropped.
    first buffer, so the two transcripts align.
 3. On stop: close both files, stop the stream.
 4. Transcribe each file with `LocalTranscriptionService` using
-   `large-v3-turbo`, requesting **segment timestamps**. Files longer than
-   10 minutes are chunked into 10-minute pieces with the offset added back to
-   each segment's timestamps.
+   `large-v3-turbo`, requesting **segment timestamps**. No external chunking:
+   WhisperKit processes long files in its own 30-second windows and returns
+   segments with absolute timestamps.
 5. Merge (see `TranscriptMerger`).
-6. Send the merged transcript to `ClaudeVisionClient` (text-only path, no
-   images) for the recap.
+6. Send the merged transcript to a new `MeetingRecapService` — a small
+   non-streaming Claude client. Deliberately NOT `ClaudeVisionClient`: that
+   client records every exchange into circle-to-ask's follow-up history, and a
+   meeting transcript must never leak into a later circle-to-ask context.
 7. Write the `meeting` row. Delete `me.caf` and `them.caf`.
 
 **Guards:**
@@ -187,10 +189,8 @@ would be 360 images × ~2,000 tokens = ~$2.20 for the same meeting.
 Recap calls are logged to the existing `usageEvent` table via `UsageStore`, so
 they appear in Usage & cost like every other call.
 
-`ClaudeVisionClient` currently hardcodes `max_tokens: 1024`
-(`ClaudeVisionClient.swift:65`). The recap path needs ~2,000, so the request
-builder gains a `maxTokens` parameter defaulting to the current 1024. No
-behaviour change for circle-to-ask.
+The recap call lives in its own `MeetingRecapService` with `max_tokens: 2000`;
+`ClaudeVisionClient` and its hardcoded 1024 are untouched.
 
 ## Privacy
 
@@ -228,7 +228,8 @@ but **out of scope** for this phase.
   overlapping mic and system segments, ordering.
 - `SpeakerNameReader` caption parsing — `Name: text`, names containing colons,
   no colon, empty OCR result.
-- Chunk-offset arithmetic for meetings over 10 minutes.
+- `MeetingRecapService` response parsing — clean JSON, fenced JSON, missing
+  keys, empty action items.
 
 **Manual QA (owner):**
 - Real 3-person Meet call, captions on → correct names on the transcript.
