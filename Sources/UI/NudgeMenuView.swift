@@ -12,7 +12,7 @@ struct HotkeyString {
 }
 
 enum NudgePage: Equatable {
-    case home, agents, settings, history, insights, usage, scratchpad
+    case home, agents, settings, history, insights, usage, scratchpad, meetings
 
     var title: String {
         switch self {
@@ -23,6 +23,7 @@ enum NudgePage: Equatable {
         case .insights: return "Insights"
         case .usage: return "Usage"
         case .scratchpad: return "Scratchpad"
+        case .meetings: return "Meetings"
         }
     }
 
@@ -51,6 +52,9 @@ struct NudgeMenuView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var history = HistoryStore.shared
     @ObservedObject private var usage = UsageStore.shared
+    @ObservedObject private var meeting = MeetingSession.shared
+    @ObservedObject private var meetingStore = MeetingStore.shared
+    @State private var selectedMeetingID: String?
     @State private var page: NudgePage = .home
     @State private var expanded = false
     @State private var collapsedSize = CGSize(width: 260, height: 16)
@@ -74,6 +78,7 @@ struct NudgeMenuView: View {
                     pageLayer(insightsView, for: .insights)
                     pageLayer(usageView, for: .usage)
                     pageLayer(scratchpadView, for: .scratchpad)
+                    pageLayer(meetingsView, for: .meetings)
                 }
                 .animation(.easeOut(duration: 0.18), value: page)
             }
@@ -315,23 +320,39 @@ struct NudgeMenuView: View {
                             .fill(Color(red: 0.12, green: 0.12, blue: 0.14))
                     )
 
-                    // Undock Cursor pill — yellow accent (placeholder)
-                    Button(action: {}) {
+                    // Record Call pill — meeting recording (Phase 6)
+                    Button(action: { meeting.toggle(appState: appState) }) {
                         HStack(spacing: 5) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text("Undock Cursor")
-                                .font(.system(size: 12, weight: .semibold))
+                            switch meeting.state {
+                            case .recording(let startedAt):
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 10, weight: .semibold))
+                                TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                                    Text(recordElapsed(from: startedAt, now: context.date))
+                                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                }
+                            case .processing:
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Processing…")
+                                    .font(.system(size: 12, weight: .semibold))
+                            default:
+                                Image(systemName: "record.circle")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text("Record Call")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
                         }
-                        .foregroundColor(Color(red: 0.10, green: 0.10, blue: 0.10))
+                        .foregroundColor(recordPillForeground)
                         .padding(.horizontal, 12)
                         .frame(height: 32)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(red: 0.98, green: 0.80, blue: 0.10))
+                                .fill(recordPillFill)
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(meeting.state == .processing)
 
                     // Circular "i" button (placeholder)
                     Button(action: {}) {
@@ -1129,6 +1150,8 @@ struct NudgeMenuView: View {
                     VStack(spacing: 0) {
                         navRow(icon: "clock", title: "History", page: .history)
                         rowDivider
+                        navRow(icon: "person.2", title: "Meetings", page: .meetings)
+                        rowDivider
                         navRow(icon: "chart.bar", title: "Insights", page: .insights)
                         rowDivider
                         navRow(icon: "dollarsign.circle", title: "Usage & cost", page: .usage)
@@ -1239,6 +1262,181 @@ struct NudgeMenuView: View {
         Divider()
             .background(Color(red: 0.18, green: 0.18, blue: 0.20))
             .padding(.leading, 46)
+    }
+
+    // MARK: - Record Call pill (Phase 6)
+
+    private var recordPillFill: Color {
+        switch meeting.state {
+        case .recording: return Color(red: 0.85, green: 0.20, blue: 0.18)
+        case .processing: return Color(red: 0.20, green: 0.20, blue: 0.22)
+        default: return Color(red: 0.98, green: 0.80, blue: 0.10)
+        }
+    }
+
+    private var recordPillForeground: Color {
+        switch meeting.state {
+        case .recording, .processing: return .white
+        default: return Color(red: 0.10, green: 0.10, blue: 0.10)
+        }
+    }
+
+    private func recordElapsed(from start: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    // MARK: - Meetings page (Phase 6)
+
+    private var meetingsView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if let selected = meetingStore.meetings.first(where: { $0.id == selectedMeetingID }) {
+                    meetingDetail(selected)
+                } else if meetingStore.meetings.isEmpty {
+                    Text("No meetings yet — hit Record Call during your next call.")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+                        .padding(.top, 24)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    ForEach(meetingStore.meetings) { m in
+                        Button(action: { selectedMeetingID = m.id }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(m.title)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    Text(meetingSubtitle(m))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+                                }
+                                Spacer()
+                                if m.recapFailed {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.orange)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color(red: 0.10, green: 0.10, blue: 0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        .onDisappear { selectedMeetingID = nil }
+    }
+
+    private func meetingSubtitle(_ m: Meeting) -> String {
+        let date = DateFormatter.localizedString(from: m.startedAt, dateStyle: .medium, timeStyle: .short)
+        let minutes = max(1, Int(m.duration) / 60)
+        let others = m.participantList.filter { $0 != TranscriptMerger.meSpeaker }
+        let people = others.isEmpty ? "" : " · " + others.joined(separator: ", ")
+        return "\(date) · \(minutes) min\(people)"
+    }
+
+    private func meetingDetail(_ m: Meeting) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button(action: { selectedMeetingID = nil }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                    Text("All meetings").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+
+            Text(m.title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+            Text(meetingSubtitle(m))
+                .font(.system(size: 10))
+                .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+
+            if let recap = m.recap {
+                meetingSectionHeader("Recap", copyText: recap)
+                Text(recap)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(red: 0.85, green: 0.85, blue: 0.87))
+                    .textSelection(.enabled)
+            } else {
+                HStack(spacing: 8) {
+                    Text("Recap failed.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                    Button("Retry") { meeting.retryRecap(meetingID: m.id) }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(red: 0.98, green: 0.80, blue: 0.10))
+                        .disabled(meeting.state == .processing)
+                }
+            }
+
+            let items = m.actionItemList
+            if !items.isEmpty {
+                let itemsText = items.map { "\($0.owner): \($0.task)" }.joined(separator: "\n")
+                meetingSectionHeader("Action items", copyText: itemsText)
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(item.owner)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(item.task)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(red: 0.85, green: 0.85, blue: 0.87))
+                    }
+                }
+            }
+
+            let transcriptText = MeetingRecapService.formatTranscript(m.lines)
+            meetingSectionHeader("Transcript", copyText: transcriptText)
+            Text(transcriptText)
+                .font(.system(size: 11).monospaced())
+                .foregroundColor(Color(red: 0.70, green: 0.70, blue: 0.72))
+                .textSelection(.enabled)
+
+            Button(action: {
+                meetingStore.delete(id: m.id)
+                selectedMeetingID = nil
+            }) {
+                Text("Delete meeting")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+        }
+    }
+
+    private func meetingSectionHeader(_ title: String, copyText: String) -> some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
+            Spacer()
+            Button(action: {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(copyText, forType: .string)
+            }) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 4)
     }
 }
 
