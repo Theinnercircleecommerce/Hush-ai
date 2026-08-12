@@ -69,12 +69,20 @@ final class MeetingSession: ObservableObject {
         systemService.onFrame = { [weak self] pixelBuffer, t in
             self?.nameReader.process(pixelBuffer: pixelBuffer, at: t)
         }
+        // Read the window numbers HERE, on the main actor. Handing NSWindows
+        // to the nonisolated capture service made it touch AppKit off the
+        // main thread, which killed the app the instant Record Call was
+        // pressed — silently, with no crash report.
+        let hushWindowIDs = NSApp.windows.map { CGWindowID($0.windowNumber) }
+        TalkHotkeyMonitor.diag("MEETING start — \(hushWindowIDs.count) own windows excluded")
         Task {
             do {
-                try await systemService.start(excluding: NSApp.windows)
+                try await systemService.start(excludeWindowIDs: hushWindowIDs)
                 try micService.startRecording()
+                TalkHotkeyMonitor.diag("MEETING recording — mic + system audio live")
                 state = .recording(startedAt: Date())
             } catch {
+                TalkHotkeyMonitor.diag("MEETING start failed — \(error.localizedDescription)")
                 let systemURL = await systemService.stop()
                 let mic = micService.stopRecording()
                 if let systemURL { try? FileManager.default.removeItem(at: systemURL) }
@@ -112,16 +120,19 @@ final class MeetingSession: ObservableObject {
             }
 
             guard duration >= Self.minimumMeetingSeconds, let mic, let systemURL else {
+                TalkHotkeyMonitor.diag("MEETING discarded — \(Int(duration))s, under the \(Int(Self.minimumMeetingSeconds))s floor")
                 state = .idle
                 return
             }
 
             do {
                 let language = AppSettings.shared.primaryLanguage
+                TalkHotkeyMonitor.diag("MEETING transcribing — \(Int(duration))s, \(ticks.count) speaker ticks, \(names.count) names")
                 let micSegments = try await transcriber.transcribeSegments(
                     fileURL: mic.url, modelSize: Self.whisperModel, language: language)
                 let systemSegments = try await transcriber.transcribeSegments(
                     fileURL: systemURL, modelSize: Self.whisperModel, language: language)
+                TalkHotkeyMonitor.diag("MEETING transcribed — \(micSegments.count) mic / \(systemSegments.count) system segments")
 
                 let lines = TranscriptMerger.merge(micSegments: micSegments,
                                                    systemSegments: systemSegments,

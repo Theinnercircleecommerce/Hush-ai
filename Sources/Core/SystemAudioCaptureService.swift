@@ -35,18 +35,30 @@ final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegat
     private let audioQueue = DispatchQueue(label: "com.hush.meeting.audio")
     private let frameQueue = DispatchQueue(label: "com.hush.meeting.frames")
 
-    func start(excluding windows: [NSWindow]) async throws {
+    /// - Parameter excludeWindowIDs: Hush's own window numbers, ALREADY read on
+    ///   the main actor by the caller.
+    ///
+    ///   An `NSWindow` must never be passed in here. This type is nonisolated
+    ///   (its stream callbacks are background queues), so reading an AppKit
+    ///   property inside it runs off the main thread and kills the process
+    ///   with no crash report and no stderr. `ScreenCaptureService` dodges
+    ///   this by being `@MainActor` outright; this one can't be, so the
+    ///   boundary is enforced by taking plain IDs instead.
+    func start(excludeWindowIDs: [CGWindowID]) async throws {
+        TalkHotkeyMonitor.diag("MEETING capture — requesting shareable content")
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
+            TalkHotkeyMonitor.diag("MEETING capture FAILED — screen recording not permitted")
             throw ScreenCaptureError(message: "enable screen recording for Hush in system settings")
         }
         guard let display = content.displays.first else {
+            TalkHotkeyMonitor.diag("MEETING capture FAILED — no displays")
             throw ScreenCaptureError(message: "enable screen recording for Hush in system settings")
         }
 
-        let excludeIDs = Set(windows.map { CGWindowID($0.windowNumber) })
+        let excludeIDs = Set(excludeWindowIDs)
         let excluded = content.windows.filter { excludeIDs.contains($0.windowID) }
         let filter = SCContentFilter(display: display, excludingWindows: excluded)
 
