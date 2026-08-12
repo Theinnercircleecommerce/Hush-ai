@@ -39,14 +39,24 @@ enum MeetingRecapService {
 
     static let systemPrompt = """
     You summarize meeting transcripts. The speaker "Me" is the user of this \
-    app; other speakers are named as Google Meet's captions showed them, and \
-    "Someone else" marks lines that couldn't be attributed. Reply with ONLY a \
-    JSON object, no markdown fences, exactly this shape:
+    app — that label is always reliable. "Someone else" marks a remote \
+    participant whose name wasn't captured at that moment; a name in place of \
+    it is reliable.
+
+    The Participants line lists everyone detected on the call. When lines are \
+    marked "Someone else", work out which participant most likely said each \
+    one, using who gets addressed by name, who answers a question, who owns \
+    the topic, and turn-taking. Attribute an action item to a named person \
+    when the context supports it. If it genuinely doesn't, use "Someone else" \
+    as the owner rather than guessing at random — never invent a name that \
+    isn't in the Participants line.
+
+    Reply with ONLY a JSON object, no markdown fences, exactly this shape:
     {"title": "...", "recap": "...", "action_items": [{"owner": "...", "task": "..."}]}
     - "title": at most 8 words naming the meeting's subject.
     - "recap": 5-10 plain-text sentences covering topics, decisions, and outcomes.
     - "action_items": every commitment made, one entry per task, owner exactly \
-    as named in the transcript. Empty array if none.
+    as named in the Participants line (or "Me"). Empty array if none.
     """
 
     /// "[03:12] Sarah: ship friday" — one line per attributed line.
