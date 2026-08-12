@@ -49,6 +49,14 @@ class AppState: ObservableObject {
     }
     
     func startRecording() {
+        // AppState isn't @MainActor-isolated, but every call site (hotkeys,
+        // UI actions) already runs on the main thread; MeetingSession is
+        // @MainActor, so the read needs an explicit isolation assertion to
+        // type-check.
+        if MainActor.assumeIsolated({ MeetingSession.shared.isRecording }) {
+            hudState = .error("recording a meeting — stop it first")
+            return
+        }
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
         if status == .authorized {
             do {

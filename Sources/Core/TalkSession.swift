@@ -121,6 +121,13 @@ final class TalkSession {
         // down, which is exactly when reaching for ⌃⌥ feels natural.
         // Dictation already guards the mirror case (AppDelegate checks
         // hudState == .idle before starting); this is the other half.
+        // A meeting recording owns its own mic engine; talking over it would
+        // interleave two sessions' audio UX. Refuse quietly.
+        guard !MeetingSession.shared.isRecording else {
+            TalkHotkeyMonitor.diag("SESSION press ignored — meeting is recording")
+            return
+        }
+
         guard !appState.audioService.isRecording else {
             TalkHotkeyMonitor.diag("SESSION press ignored — dictation is recording")
             return
