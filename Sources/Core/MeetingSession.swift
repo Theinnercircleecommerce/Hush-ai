@@ -75,8 +75,10 @@ final class MeetingSession: ObservableObject {
                 try micService.startRecording()
                 state = .recording(startedAt: Date())
             } catch {
-                _ = await systemService.stop()
-                _ = micService.stopRecording()
+                let systemURL = await systemService.stop()
+                let mic = micService.stopRecording()
+                if let systemURL { try? FileManager.default.removeItem(at: systemURL) }
+                if let mic { try? FileManager.default.removeItem(at: mic.url) }
                 state = .failed(error.localizedDescription)
                 scheduleFailureClear()
             }
