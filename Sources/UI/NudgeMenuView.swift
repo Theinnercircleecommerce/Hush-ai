@@ -826,16 +826,29 @@ struct NudgeMenuView: View {
                 .font(.system(size: 11))
                 .foregroundColor(.gray)
                 .padding(.horizontal, 4)
-            TextEditor(text: $settings.scratchpadText)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
-                )
-                .colorScheme(.dark)
+            // Mounted ONLY while this page shows. Every other page keeps its
+            // views alive for instant navigation, but a TextEditor is backed
+            // by an NSTextView, and an NSTextView installs an I-beam cursor
+            // rect over its whole frame. Cursor rects are AppKit-level:
+            // .opacity(0) and .allowsHitTesting(false) do not clear them, so a
+            // hidden scratchpad turned the entire panel into an I-beam on
+            // every page. Rebuilding it on navigation is cheap.
+            Group {
+                if page == .scratchpad {
+                    TextEditor(text: $settings.scratchpadText)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white)
+                        .scrollContentBackground(.hidden)
+                        .padding(10)
+                        .colorScheme(.dark)
+                } else {
+                    Color.clear
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(red: 0.10, green: 0.10, blue: 0.11))
+            )
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
