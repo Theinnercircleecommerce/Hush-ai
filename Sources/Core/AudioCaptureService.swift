@@ -11,6 +11,11 @@ class AudioCaptureService: NSObject, ObservableObject {
     /// Envelope follower state for the HUD level. Touched only on the audio
     /// tap thread while recording, and reset on the main thread between takes.
     private var smoothedLevel: Float = 0
+    /// Frames the tap actually delivered this take. Zero means the tap was
+    /// installed against a format the bound device never produces — the
+    /// Bluetooth failure mode — and is worth a diag line, because the
+    /// resulting .caf is a valid-looking header with no audio in it.
+    private var capturedFrames: Int64 = 0
 
     @Published var isRecording = false
     @Published var audioLevel: Float = 0.0
@@ -36,9 +41,11 @@ class AudioCaptureService: NSObject, ObservableObject {
         self.currentFileURL = fileURL
 
         smoothedLevel = 0
+        capturedFrames = 0
         let engine = AVAudioEngine()
-        applySelectedMicrophone(to: engine)
+        let boundDevice = applySelectedMicrophone(to: engine)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+        TalkHotkeyMonitor.diag("REC start — device=\(boundDevice.map(String.init) ?? "none") format=\(Int(inputFormat.sampleRate))Hz/\(inputFormat.channelCount)ch")
 
         let file = try AVAudioFile(forWriting: fileURL, settings: inputFormat.settings)
         self.audioFile = file
@@ -46,6 +53,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
             try? self.audioFile?.write(from: buffer)
+            self.capturedFrames += Int64(buffer.frameLength)
 
             // RMS level for the HUD waveform, mapped like the old dB metering (-50dB...0dB -> 0...1)
             guard let channelData = buffer.floatChannelData?[0] else { return }
@@ -74,11 +82,34 @@ class AudioCaptureService: NSObject, ObservableObject {
         }
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Same late-listener hazard as stopRecording: a failed start still
+            // registered CoreAudio callbacks, so park the engine instead of
+            // letting it free on throw.
+            engine.inputNode.removeTap(onBus: 0)
+            self.audioFile = nil
+            Self.retireEngine(engine)
+            TalkHotkeyMonitor.diag("REC start FAILED — \((error as NSError).code)")
+            throw error
+        }
         self.audioEngine = engine
 
         startTime = Date()
         isRecording = true
+    }
+
+    /// Stopped engines parked here until their CoreAudio callbacks have
+    /// drained. Main-thread only.
+    private static var retiredEngines: [ObjectIdentifier: AVAudioEngine] = [:]
+
+    private static func retireEngine(_ engine: AVAudioEngine) {
+        let key = ObjectIdentifier(engine)
+        retiredEngines[key] = engine
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            retiredEngines.removeValue(forKey: key)
+        }
     }
 
     func stopRecording() -> (url: URL, duration: TimeInterval)? {
@@ -90,12 +121,23 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        audioEngine = nil // Destroy the engine so macOS drops the mic privacy indicator
+        audioEngine = nil
         audioFile = nil // Close the file so it's fully flushed for transcription
+
+        // Don't let the engine deallocate yet. Bluetooth headsets renegotiate
+        // their link (A2DP↔SCO) right around stop, and AVAudioIOUnit's property
+        // listener fires on its own dispatch queue AFTER we drop our reference —
+        // objc_msgSend on the freed engine, SIGSEGV (crash 2026-08-15 14:45,
+        // faulting thread "AVAudioIOUnit"). Park the stopped engine for 10s so
+        // late listener callbacks land on a live object. The engine is already
+        // stopped, so the mic privacy indicator still drops immediately.
+        Self.retireEngine(engine)
 
         isRecording = false
         audioLevel = 0.0
         smoothedLevel = 0
+
+        TalkHotkeyMonitor.diag("REC stop — \(String(format: "%.2f", duration))s, \(capturedFrames) frames captured")
 
         return (url, duration)
     }
@@ -167,18 +209,47 @@ extension AudioCaptureService {
         return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
     }
 
-    /// Points the engine's input node at the selected device. Call BEFORE
-    /// installing the tap / starting the engine.
-    func applySelectedMicrophone(to engine: AVAudioEngine) {
+    /// The device CoreAudio currently considers the system input.
+    static func defaultInputDeviceID() -> AudioDeviceID? {
+        var deviceID = kAudioObjectUnknown
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
+        )
+        return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
+    }
+
+    /// Points the engine's input node at a real input device. Call BEFORE
+    /// reading the input format, installing the tap, or starting the engine.
+    ///
+    /// This ALWAYS binds, even when the user hasn't picked a mic. Leaving the
+    /// engine to choose is what broke Bluetooth headsets: AirPods publish two
+    /// separate CoreAudio devices — a 48 kHz output-only one and a lower-rate
+    /// input-only one — and an unbound input node latches onto the 48 kHz
+    /// output side. `outputFormat(forBus:)` then reports 48 kHz, the tap is
+    /// installed expecting audio the mic never produces, and the take lands as
+    /// a 4096-byte header with zero frames. Binding to the resolved input
+    /// device makes the reported format match the hardware that actually feeds
+    /// the tap.
+    @discardableResult
+    func applySelectedMicrophone(to engine: AVAudioEngine) -> AudioDeviceID? {
         let uid = AppSettings.shared.selectedMicrophoneID
-        guard !uid.isEmpty,
-              var deviceID = Self.audioDeviceID(forUID: uid),
-              let unit = engine.inputNode.audioUnit else { return }
-        AudioUnitSetProperty(
+        // A stale UID (device unplugged, headset disconnected) resolves to nil —
+        // fall through to the system default rather than leaving it unbound.
+        let resolved = uid.isEmpty ? nil : Self.audioDeviceID(forUID: uid)
+        guard var deviceID = resolved ?? Self.defaultInputDeviceID(),
+              let unit = engine.inputNode.audioUnit else { return nil }
+        let status = AudioUnitSetProperty(
             unit,
             kAudioOutputUnitProperty_CurrentDevice,
             kAudioUnitScope_Global, 0,
             &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size)
         )
+        return status == noErr ? deviceID : nil
     }
 }
