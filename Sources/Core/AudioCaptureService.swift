@@ -85,7 +85,10 @@ class AudioCaptureService: NSObject, ObservableObject {
         if abandoned { finishIdle() ; return }
 
         let engine = AVAudioEngine()
-        let boundDevice = applySelectedMicrophone(to: engine)
+        // After a dead first take the saved mic selection is the prime suspect
+        // (it can resolve to the output half of a Bluetooth headset) — retries
+        // trust the system default input instead.
+        let boundDevice = applySelectedMicrophone(to: engine, preferDefault: attempt > 1)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
         TalkHotkeyMonitor.diag("REC start(\(attempt)) — device=\(boundDevice.map(String.init) ?? "none") format=\(Int(inputFormat.sampleRate))Hz/\(inputFormat.channelCount)ch")
 
@@ -339,26 +342,52 @@ extension AudioCaptureService {
         return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
     }
 
+    /// True when the device exposes at least one INPUT channel. Bluetooth
+    /// headsets publish two CoreAudio devices — a 48 kHz output-only one and a
+    /// lower-rate input-only one — and after a reconnect a saved mic UID can
+    /// resolve to the OUTPUT half. Binding the input unit to that device
+    /// "works" (engine starts, format reads 48 kHz) but the tap never receives
+    /// a single frame.
+    static func hasInputChannels(_ id: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr, size > 0 else {
+            return false
+        }
+        let listPtr = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { listPtr.deallocate() }
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, listPtr) == noErr else {
+            return false
+        }
+        let buffers = UnsafeMutableAudioBufferListPointer(listPtr.assumingMemoryBound(to: AudioBufferList.self))
+        return buffers.reduce(0) { $0 + Int($1.mNumberChannels) } > 0
+    }
+
     /// Points the engine's input node at a real input device. Call BEFORE
     /// reading the input format, installing the tap, or starting the engine.
     ///
-    /// This ALWAYS binds, even when the user hasn't picked a mic. Leaving the
-    /// engine to choose is what broke Bluetooth headsets: AirPods publish two
-    /// separate CoreAudio devices — a 48 kHz output-only one and a lower-rate
-    /// input-only one — and an unbound input node latches onto the 48 kHz
-    /// output side. `outputFormat(forBus:)` then reports 48 kHz, the tap is
-    /// installed expecting audio the mic never produces, and the take lands as
-    /// a 4096-byte header with zero frames. Binding to the resolved input
-    /// device makes the reported format match the hardware that actually feeds
-    /// the tap.
+    /// This ALWAYS binds — an unbound input node latches onto whatever device
+    /// the HAL suggests, which for Bluetooth headsets is often the 48 kHz
+    /// output-only half (zero-frame takes, 4096-byte header-only .caf files).
+    /// Candidates are tried in order and anything without input channels is
+    /// skipped. `preferDefault` drops the user's saved selection to the back —
+    /// the watchdog uses it after a dead take, when the saved UID is the prime
+    /// suspect.
     @discardableResult
-    func applySelectedMicrophone(to engine: AVAudioEngine) -> AudioDeviceID? {
+    func applySelectedMicrophone(to engine: AVAudioEngine, preferDefault: Bool = false) -> AudioDeviceID? {
         let uid = AppSettings.shared.selectedMicrophoneID
-        // A stale UID (device unplugged, headset disconnected) resolves to nil —
-        // fall through to the system default rather than leaving it unbound.
-        let resolved = uid.isEmpty ? nil : Self.audioDeviceID(forUID: uid)
-        guard var deviceID = resolved ?? Self.defaultInputDeviceID(),
-              let unit = engine.inputNode.audioUnit else { return nil }
+        let selected = uid.isEmpty ? nil : Self.audioDeviceID(forUID: uid)
+        var candidates = [selected, Self.defaultInputDeviceID()]
+        if preferDefault { candidates.reverse() }
+        guard var deviceID = candidates.compactMap({ $0 }).first(where: { Self.hasInputChannels($0) }),
+              let unit = engine.inputNode.audioUnit else {
+            TalkHotkeyMonitor.diag("REC bind — no device with input channels (selected uid \(uid.isEmpty ? "unset" : "set"))")
+            return nil
+        }
         let status = AudioUnitSetProperty(
             unit,
             kAudioOutputUnitProperty_CurrentDevice,
