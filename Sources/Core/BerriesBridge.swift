@@ -106,8 +106,12 @@ enum BerriesBridge {
         request.timeoutInterval = requestTimeout
         request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Only what the user actually said. Which image is the crop is carried
+        // by the filenames (`…-circled.jpg` vs `…-screen-N.jpg`) and explained
+        // in Berries Code's own system prompt — putting it in the message made
+        // the chat show words the user never spoke.
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text": prompt(question: question, drop: drop),
+            "text": question,
             "images": drop.allPaths,
         ])
 
@@ -202,16 +206,4 @@ enum BerriesBridge {
         }
     }
 
-    /// What lands in the chat. The attachments carry the images; this only has
-    /// to say which one the user was pointing at, since attachment order alone
-    /// doesn't tell Claude that.
-    private static func prompt(question: String, drop: Dropbox) -> String {
-        guard let cropPath = drop.cropPath else { return question }
-        return """
-        \(question)
-
-        (I circled part of my screen — that crop is \(cropPath). Look at it \
-        first; the other attachment is the whole screen for context.)
-        """
-    }
 }
