@@ -99,7 +99,10 @@ final class TalkSession {
 
         // Keys before the mic: a user with no key should never see a recording
         // indicator, and should get the actionable message instead.
-        guard KeychainStore.get(.anthropic) != nil else {
+        //
+        // A connected Berries Code chat answers on its own Claude login, so
+        // Hush's key isn't needed on that path — only when we answer ourselves.
+        if BerriesBridge.connection() == nil, KeychainStore.get(.anthropic) == nil {
             TalkHotkeyMonitor.diag("SESSION blocked — no anthropic key")
             fail("add your api key in settings")
             return
@@ -270,6 +273,13 @@ final class TalkSession {
         }
         TalkHotkeyMonitor.diag("SESSION crop=\(crop.map { "\($0.count) bytes" } ?? "none")")
 
+        // A chat wearing the @hush pill takes over from here: it answers with
+        // the project in front of it instead of screenshots alone.
+        if let berries = BerriesBridge.connection() {
+            try await runViaBerries(berries, transcript: transcript, screens: screens, crop: crop)
+            return
+        }
+
         // Speech is opt-in on the OpenAI key. Decide up front so we only bother
         // pipelining sentences when we can actually speak them.
         let canSpeak = KeychainStore.get(.openai) != nil
@@ -344,6 +354,47 @@ final class TalkSession {
 
         appState.hudState = .idle
         TalkHotkeyMonitor.diag("SESSION complete — idle")
+    }
+
+    // MARK: - Berries Code
+
+    /// Hands the session to the connected chat and speaks its lead paragraph.
+    ///
+    /// Nothing is pipelined here, unlike the direct path: a Claude Code turn
+    /// arrives whole, so there are no sentences to start speaking early. The
+    /// HUD stays on `.transcribing` for the wait — it reads as "working", and
+    /// the answer bubble names the chat so the wait isn't unexplained.
+    private func runViaBerries(_ connection: BerriesConnection,
+                               transcript: String,
+                               screens: [CapturedScreen],
+                               crop: Data?) async throws {
+        guard let appState = appState else { return }
+
+        appState.hudState = .transcribing
+        onAnswerChunk?("→ \(connection.chatTitle)\n\n")
+        TalkHotkeyMonitor.diag("SESSION routing to berries — chat=\(connection.chatTitle)")
+
+        let answer = try await BerriesBridge.ask(
+            transcript: transcript,
+            screens: screens,
+            croppedRegion: crop,
+            connection: connection
+        )
+        TalkHotkeyMonitor.diag("SESSION berries answer ok — \(answer.full.count) chars, speaking \(answer.spoken.count)")
+
+        onAnswerChunk?(answer.spoken)
+
+        guard KeychainStore.get(.openai) != nil, !answer.spoken.isEmpty else {
+            TalkHotkeyMonitor.diag("SESSION berries — nothing to speak, idle")
+            appState.hudState = .idle
+            return
+        }
+
+        appState.hudState = .speaking
+        await SpeechOutputService.shared.enqueue(answer.spoken)
+        await awaitSpeechCompletion()
+        appState.hudState = .idle
+        TalkHotkeyMonitor.diag("SESSION berries complete — idle")
     }
 
     // MARK: - Lost-release watchdog
