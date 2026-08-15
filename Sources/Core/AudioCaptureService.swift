@@ -6,15 +6,35 @@ class AudioCaptureService: NSObject, ObservableObject {
     // AVAudioEngine (not AVAudioRecorder) so the mic is fully released on stop.
     // AVAudioRecorder's AudioQueue keeps the macOS orange mic indicator lit even
     // after stop()/dealloc; destroying the engine reliably drops it.
+    //
+    // Everything that touches CoreAudio HAL (device binding, format reads,
+    // engine start/stop) runs on `captureQueue`, NEVER the main thread. A
+    // Bluetooth headset renegotiating A2DP↔SCO can wedge those calls for tens
+    // of seconds; when they ran on the main thread that was a full app freeze
+    // (sampled 2026-08-15: main thread stuck under engine start while the SCO
+    // link came up).
+    private let captureQueue = DispatchQueue(label: "com.hush.audio-capture")
+
+    /// Take lifecycle, guarded by `stateLock`. `takeID` pairs each start with
+    /// its stop and invalidates stale watchdogs.
+    private enum EngineState { case idle, opening, running }
+    private let stateLock = NSLock()
+    private var engineState: EngineState = .idle
+    private var stopRequested = false
+    private var takeID: UInt64 = 0
+
+    /// captureQueue-only.
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
+
     /// Envelope follower state for the HUD level. Touched only on the audio
-    /// tap thread while recording, and reset on the main thread between takes.
+    /// tap thread while recording, and reset between takes.
     private var smoothedLevel: Float = 0
-    /// Frames the tap actually delivered this take. Zero means the tap was
-    /// installed against a format the bound device never produces — the
-    /// Bluetooth failure mode — and is worth a diag line, because the
-    /// resulting .caf is a valid-looking header with no audio in it.
+    /// Frames the tap actually delivered this take (guarded by stateLock).
+    /// Zero shortly after start means the tap was installed against a format
+    /// the bound device never produces — the Bluetooth failure mode, where the
+    /// engine reports the stale A2DP rate before the SCO mic link is up — and
+    /// triggers the watchdog rebuild.
     private var capturedFrames: Int64 = 0
 
     @Published var isRecording = false
@@ -39,21 +59,51 @@ class AudioCaptureService: NSObject, ObservableObject {
         let fileName = UUID().uuidString + ".caf"
         let fileURL = tempDir.appendingPathComponent(fileName)
         self.currentFileURL = fileURL
+        self.startTime = Date()
+        self.isRecording = true
 
-        smoothedLevel = 0
+        stateLock.lock()
+        takeID &+= 1
+        let take = takeID
+        engineState = .opening
+        stopRequested = false
         capturedFrames = 0
+        stateLock.unlock()
+        smoothedLevel = 0
+
+        captureQueue.async { [weak self] in
+            self?.openEngine(take: take, fileURL: fileURL, attempt: 1)
+        }
+    }
+
+    /// captureQueue-only. Opens the mic and starts the engine; reschedules
+    /// itself (a fresh engine, same file) if the tap turns out to be dead.
+    private func openEngine(take: UInt64, fileURL: URL, attempt: Int) {
+        stateLock.lock()
+        let abandoned = stopRequested || take != takeID
+        stateLock.unlock()
+        if abandoned { finishIdle() ; return }
+
         let engine = AVAudioEngine()
         let boundDevice = applySelectedMicrophone(to: engine)
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-        TalkHotkeyMonitor.diag("REC start — device=\(boundDevice.map(String.init) ?? "none") format=\(Int(inputFormat.sampleRate))Hz/\(inputFormat.channelCount)ch")
+        TalkHotkeyMonitor.diag("REC start(\(attempt)) — device=\(boundDevice.map(String.init) ?? "none") format=\(Int(inputFormat.sampleRate))Hz/\(inputFormat.channelCount)ch")
 
-        let file = try AVAudioFile(forWriting: fileURL, settings: inputFormat.settings)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
+              let file = try? AVAudioFile(forWriting: fileURL, settings: inputFormat.settings) else {
+            TalkHotkeyMonitor.diag("REC start(\(attempt)) FAILED — bad format or file")
+            Self.retireEngine(engine)
+            finishIdle()
+            return
+        }
         self.audioFile = file
 
         engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
             try? self.audioFile?.write(from: buffer)
+            self.stateLock.lock()
             self.capturedFrames += Int64(buffer.frameLength)
+            self.stateLock.unlock()
 
             // RMS level for the HUD waveform, mapped like the old dB metering (-50dB...0dB -> 0...1)
             guard let channelData = buffer.floatChannelData?[0] else { return }
@@ -83,62 +133,127 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         engine.prepare()
         do {
-            try engine.start()
+            try engine.start() // the wedge zone: can block for seconds on Bluetooth
         } catch {
-            // Same late-listener hazard as stopRecording: a failed start still
-            // registered CoreAudio callbacks, so park the engine instead of
-            // letting it free on throw.
             engine.inputNode.removeTap(onBus: 0)
             self.audioFile = nil
             Self.retireEngine(engine)
-            TalkHotkeyMonitor.diag("REC start FAILED — \((error as NSError).code)")
-            throw error
+            TalkHotkeyMonitor.diag("REC start(\(attempt)) FAILED — \((error as NSError).code)")
+            finishIdle()
+            return
+        }
+
+        stateLock.lock()
+        let stopMeanwhile = stopRequested || take != takeID
+        if !stopMeanwhile { engineState = .running }
+        stateLock.unlock()
+
+        if stopMeanwhile {
+            // The user released (or a new take began) while start was blocked.
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            self.audioFile = nil
+            Self.retireEngine(engine)
+            finishIdle()
+            TalkHotkeyMonitor.diag("REC start(\(attempt)) — finished after stop, discarded")
+            return
         }
         self.audioEngine = engine
 
-        startTime = Date()
-        isRecording = true
+        // Dead-tap watchdog. After a Bluetooth headset falls back to A2DP, the
+        // engine can report a stale rate (44.1k) while the mic will only ever
+        // deliver SCO-rate audio — the tap then never fires. If no frames have
+        // arrived shortly after start, rebuild from scratch: by then the SCO
+        // link is up and the fresh engine reads the real rate. The file is
+        // recreated by the retry, so no audio is lost — none had arrived.
+        guard attempt < 3 else { return }
+        captureQueue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self = self else { return }
+            self.stateLock.lock()
+            let dead = self.engineState == .running && take == self.takeID
+                && !self.stopRequested && self.capturedFrames == 0
+            self.stateLock.unlock()
+            guard dead, let stale = self.audioEngine else { return }
+            TalkHotkeyMonitor.diag("REC watchdog — 0 frames after 0.4s, rebuilding engine")
+            stale.inputNode.removeTap(onBus: 0)
+            stale.stop()
+            self.audioEngine = nil
+            self.audioFile = nil
+            Self.retireEngine(stale)
+            self.stateLock.lock()
+            self.engineState = .opening
+            self.stateLock.unlock()
+            self.openEngine(take: take, fileURL: fileURL, attempt: attempt + 1)
+        }
+    }
+
+    private func finishIdle() {
+        stateLock.lock()
+        engineState = .idle
+        stateLock.unlock()
     }
 
     /// Stopped engines parked here until their CoreAudio callbacks have
-    /// drained. Main-thread only.
+    /// drained. Bluetooth headsets renegotiate A2DP↔SCO right around stop,
+    /// and AVAudioIOUnit's property listener fires on its own dispatch queue
+    /// AFTER the last reference would drop — objc_msgSend on a freed engine,
+    /// SIGSEGV (crash 2026-08-15 14:45, faulting thread "AVAudioIOUnit").
+    /// Parking the stopped engine for 10s lets late callbacks land on a live
+    /// object; the engine is stopped, so the mic indicator drops immediately.
+    private static let retireLock = NSLock()
     private static var retiredEngines: [ObjectIdentifier: AVAudioEngine] = [:]
 
     private static func retireEngine(_ engine: AVAudioEngine) {
         let key = ObjectIdentifier(engine)
+        retireLock.lock()
         retiredEngines[key] = engine
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+        retireLock.unlock()
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10) {
+            retireLock.lock()
             retiredEngines.removeValue(forKey: key)
+            retireLock.unlock()
         }
     }
 
     func stopRecording() -> (url: URL, duration: TimeInterval)? {
-        guard isRecording, let engine = audioEngine, let start = startTime, let url = currentFileURL else {
+        guard isRecording, let start = startTime, let url = currentFileURL else {
+            return nil
+        }
+        isRecording = false
+        audioLevel = 0.0
+        let duration = Date().timeIntervalSince(start)
+
+        stateLock.lock()
+        stopRequested = true
+        let state = engineState
+        let frames = capturedFrames
+        stateLock.unlock()
+
+        if state != .running {
+            // Engine still opening (or already torn down). The opener sees
+            // stopRequested and discards on its own — do NOT wait on the
+            // capture queue here: that call may be wedged mid-SCO-negotiation
+            // for seconds, and blocking on it is the old main-thread freeze.
+            TalkHotkeyMonitor.diag("REC stop — \(String(format: "%.2f", duration))s, engine not running (\(state)), no audio")
             return nil
         }
 
-        let duration = Date().timeIntervalSince(start)
-
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        audioEngine = nil
-        audioFile = nil // Close the file so it's fully flushed for transcription
-
-        // Don't let the engine deallocate yet. Bluetooth headsets renegotiate
-        // their link (A2DP↔SCO) right around stop, and AVAudioIOUnit's property
-        // listener fires on its own dispatch queue AFTER we drop our reference —
-        // objc_msgSend on the freed engine, SIGSEGV (crash 2026-08-15 14:45,
-        // faulting thread "AVAudioIOUnit"). Park the stopped engine for 10s so
-        // late listener callbacks land on a live object. The engine is already
-        // stopped, so the mic privacy indicator still drops immediately.
-        Self.retireEngine(engine)
-
-        isRecording = false
-        audioLevel = 0.0
+        // Engine is running, so the queue is free: teardown is fast, and doing
+        // it synchronously guarantees the file is flushed before transcription
+        // opens it.
+        captureQueue.sync {
+            if let engine = self.audioEngine {
+                engine.inputNode.removeTap(onBus: 0)
+                engine.stop()
+                self.audioEngine = nil
+                Self.retireEngine(engine)
+            }
+            self.audioFile = nil
+        }
+        finishIdle()
         smoothedLevel = 0
 
-        TalkHotkeyMonitor.diag("REC stop — \(String(format: "%.2f", duration))s, \(capturedFrames) frames captured")
-
+        TalkHotkeyMonitor.diag("REC stop — \(String(format: "%.2f", duration))s, \(frames) frames captured")
         return (url, duration)
     }
 }
