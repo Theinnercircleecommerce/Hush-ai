@@ -85,7 +85,13 @@ class AppState: ObservableObject {
     }
     
     func stopRecording() {
-        guard let result = audioService.stopRecording() else { return }
+        guard let result = audioService.stopRecording() else {
+            // No audio ever arrived (mic still opening, or a dead Bluetooth
+            // take). Without this reset the HUD stays on "recording" forever
+            // and the app looks frozen.
+            self.hudState = .idle
+            return
+        }
         
         if result.duration < 0.3 {
             self.hudState = .idle

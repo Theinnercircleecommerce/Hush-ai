@@ -26,6 +26,11 @@ class AudioCaptureService: NSObject, ObservableObject {
     /// captureQueue-only.
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
+    /// AVAudioEngineConfigurationChange observer for the CURRENT engine.
+    /// captureQueue-only. Fires when the device's format flips mid-take —
+    /// e.g. a Bluetooth headset finishing its A2DP→SCO switch — which is the
+    /// moment a rebuild actually has a working mic to bind to.
+    private var configObserver: (any NSObjectProtocol)?
 
     /// Envelope follower state for the HUD level. Touched only on the audio
     /// tap thread while recording, and reset between takes.
@@ -163,30 +168,56 @@ class AudioCaptureService: NSObject, ObservableObject {
         }
         self.audioEngine = engine
 
-        // Dead-tap watchdog. After a Bluetooth headset falls back to A2DP, the
-        // engine can report a stale rate (44.1k) while the mic will only ever
-        // deliver SCO-rate audio — the tap then never fires. If no frames have
-        // arrived shortly after start, rebuild from scratch: by then the SCO
-        // link is up and the fresh engine reads the real rate. The file is
-        // recreated by the retry, so no audio is lost — none had arrived.
-        guard attempt < 3 else { return }
-        captureQueue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self = self else { return }
-            self.stateLock.lock()
-            let dead = self.engineState == .running && take == self.takeID
-                && !self.stopRequested && self.capturedFrames == 0
-            self.stateLock.unlock()
-            guard dead, let stale = self.audioEngine else { return }
-            TalkHotkeyMonitor.diag("REC watchdog — 0 frames after 0.4s, rebuilding engine")
-            stale.inputNode.removeTap(onBus: 0)
-            stale.stop()
-            self.audioEngine = nil
-            self.audioFile = nil
-            Self.retireEngine(stale)
-            self.stateLock.lock()
-            self.engineState = .opening
-            self.stateLock.unlock()
-            self.openEngine(take: take, fileURL: fileURL, attempt: attempt + 1)
+        // Rebuild triggers for a dead tap (0 frames: the engine read a stale
+        // A2DP-era format the SCO mic never delivers). Two paths, same action:
+        //
+        // 1. Config-change notification — macOS announcing the device format
+        //    flipped, i.e. the Bluetooth SCO link just came up. Rebuild NOW;
+        //    the fresh engine reads the real rate.
+        // 2. Watchdog at 1.5s — fallback when no notification arrives. The
+        //    interval is deliberately long: SCO negotiation itself takes
+        //    ~1-2s, and the earlier 0.4s watchdog kept killing the engine
+        //    mid-negotiation, restarting the handshake forever.
+        //
+        // The retry recreates the file, so no audio is lost — none had arrived.
+        guard attempt < 4 else { return }
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            self?.captureQueue.async {
+                self?.rebuildIfDead(take: take, fileURL: fileURL, attempt: attempt, reason: "config change")
+            }
+        }
+        captureQueue.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.rebuildIfDead(take: take, fileURL: fileURL, attempt: attempt, reason: "watchdog 1.5s")
+        }
+    }
+
+    /// captureQueue-only. Tears down the current 0-frame engine and reopens.
+    private func rebuildIfDead(take: UInt64, fileURL: URL, attempt: Int, reason: String) {
+        stateLock.lock()
+        let dead = engineState == .running && take == takeID
+            && !stopRequested && capturedFrames == 0
+        stateLock.unlock()
+        guard dead, let stale = audioEngine else { return }
+        TalkHotkeyMonitor.diag("REC rebuild(\(reason)) — 0 frames on attempt \(attempt)")
+        detachConfigObserver()
+        stale.inputNode.removeTap(onBus: 0)
+        stale.stop()
+        audioEngine = nil
+        audioFile = nil
+        Self.retireEngine(stale)
+        stateLock.lock()
+        engineState = .opening
+        stateLock.unlock()
+        openEngine(take: take, fileURL: fileURL, attempt: attempt + 1)
+    }
+
+    /// captureQueue-only.
+    private func detachConfigObserver() {
+        if let observer = configObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configObserver = nil
         }
     }
 
@@ -245,6 +276,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         // it synchronously guarantees the file is flushed before transcription
         // opens it.
         captureQueue.sync {
+            self.detachConfigObserver()
             if let engine = self.audioEngine {
                 engine.inputNode.removeTap(onBus: 0)
                 engine.stop()
