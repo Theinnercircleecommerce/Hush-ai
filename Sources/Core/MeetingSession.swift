@@ -34,8 +34,10 @@ final class MeetingSession: ObservableObject {
         return false
     }
 
-    /// Meetings shorter than this are discarded without an API call.
-    static let minimumMeetingSeconds: TimeInterval = 30
+    /// Meetings shorter than this are discarded without an API call. Low
+    /// enough that a short test recording still produces a row — a 30s floor
+    /// silently ate every trial run.
+    static let minimumMeetingSeconds: TimeInterval = 5
     /// Meetings deserve the accurate model regardless of the dictation
     /// setting; the spec pins large-v3-turbo.
     static let whisperModel = "large-v3-turbo"
@@ -126,9 +128,19 @@ final class MeetingSession: ObservableObject {
                 if let systemURL { try? FileManager.default.removeItem(at: systemURL) }
             }
 
-            guard duration >= Self.minimumMeetingSeconds, let mic, let systemURL else {
+            // Every discard reason gets a visible message. A silent drop back
+            // to .idle looks identical to "saved", which sent the owner
+            // hunting through an empty Meetings tab.
+            guard duration >= Self.minimumMeetingSeconds else {
                 TalkHotkeyMonitor.diag("MEETING discarded — \(Int(duration))s, under the \(Int(Self.minimumMeetingSeconds))s floor")
-                state = .idle
+                state = .failed("too short — record at least \(Int(Self.minimumMeetingSeconds))s")
+                scheduleFailureClear()
+                return
+            }
+            guard let mic, let systemURL else {
+                TalkHotkeyMonitor.diag("MEETING discarded — missing audio (mic: \(mic != nil), system: \(systemURL != nil))")
+                state = .failed(mic == nil ? "no mic audio captured" : "no system audio captured")
+                scheduleFailureClear()
                 return
             }
 
