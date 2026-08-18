@@ -31,6 +31,12 @@ class AudioCaptureService: NSObject, ObservableObject {
     /// e.g. a Bluetooth headset finishing its A2DP→SCO switch — which is the
     /// moment a rebuild actually has a working mic to bind to.
     private var configObserver: (any NSObjectProtocol)?
+    /// captureQueue-only. The HAL device the CURRENT engine is bound to, how
+    /// many "format matches, keep waiting" checks this take has burned, and
+    /// whether one is already scheduled (config-change storms fire several).
+    private var boundDeviceID: AudioDeviceID?
+    private var waitChecks = 0
+    private var recheckPending = false
 
     /// Envelope follower state for the HUD level. Touched only on the audio
     /// tap thread while recording, and reset between takes.
@@ -94,6 +100,9 @@ class AudioCaptureService: NSObject, ObservableObject {
         // (it can resolve to the output half of a Bluetooth headset) — retries
         // trust the system default input instead.
         let boundDevice = applySelectedMicrophone(to: engine, preferDefault: attempt > 1)
+        boundDeviceID = boundDevice
+        waitChecks = 0
+        recheckPending = false
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
         TalkHotkeyMonitor.diag("REC start(\(attempt)) — device=\(boundDevice.map(String.init) ?? "none") format=\(Int(inputFormat.sampleRate))Hz/\(inputFormat.channelCount)ch")
 
@@ -168,18 +177,19 @@ class AudioCaptureService: NSObject, ObservableObject {
         }
         self.audioEngine = engine
 
-        // Rebuild triggers for a dead tap (0 frames: the engine read a stale
-        // A2DP-era format the SCO mic never delivers). Two paths, same action:
+        // Liveness checks for a 0-frame tap. Two triggers, one handler:
         //
-        // 1. Config-change notification — macOS announcing the device format
-        //    flipped, i.e. the Bluetooth SCO link just came up. Rebuild NOW;
-        //    the fresh engine reads the real rate.
-        // 2. Watchdog at 1.5s — fallback when no notification arrives. The
-        //    interval is deliberately long: SCO negotiation itself takes
-        //    ~1-2s, and the earlier 0.4s watchdog kept killing the engine
-        //    mid-negotiation, restarting the handshake forever.
+        // 1. Config-change notification — the device format flipped (e.g. the
+        //    Bluetooth SCO link coming up or dropping).
+        // 2. Watchdog at 1.5s — fallback when no notification arrives.
         //
-        // The retry recreates the file, so no audio is lost — none had arrived.
+        // The handler only tears the engine down when its tap format DISAGREES
+        // with what the device produces (the stale-A2DP-rate case). A matching
+        // format with 0 frames means the mic is still connecting — rebuild
+        // there and the handshake restarts, another config change fires, and
+        // the take dies in a rebuild loop (2026-08-18: four rebuilds of a
+        // correctly-bound 24kHz engine; audio only flowed at attempt 4, which
+        // has no triggers left). A retry recreates the file — no audio existed.
         guard attempt < 4 else { return }
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
@@ -200,6 +210,23 @@ class AudioCaptureService: NSObject, ObservableObject {
             && !stopRequested && capturedFrames == 0
         stateLock.unlock()
         guard dead, let stale = audioEngine else { return }
+        if waitChecks < 6, let device = boundDeviceID, Self.hasInputChannels(device) {
+            let halRate = Self.nominalInputRate(device)
+            let engineRate = stale.inputNode.outputFormat(forBus: 0).sampleRate
+            if halRate > 0, abs(halRate - engineRate) < 1 {
+                if !recheckPending {
+                    recheckPending = true
+                    waitChecks += 1
+                    TalkHotkeyMonitor.diag("REC wait(\(reason)) — \(Int(engineRate))Hz matches device, mic still connecting (\(waitChecks))")
+                    captureQueue.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                        guard let self else { return }
+                        self.recheckPending = false
+                        self.rebuildIfDead(take: take, fileURL: fileURL, attempt: attempt, reason: "recheck")
+                    }
+                }
+                return
+            }
+        }
         TalkHotkeyMonitor.diag("REC rebuild(\(reason)) — 0 frames on attempt \(attempt)")
         detachConfigObserver()
         stale.inputNode.removeTap(onBus: 0)
@@ -307,9 +334,12 @@ extension AudioCaptureService {
             mediaType: .audio,
             position: .unspecified
         )
-        return session.devices.map {
-            MicrophoneDevice(id: $0.uniqueID, name: $0.localizedName)
-        }
+        return session.devices
+            // macOS surfaces its internal default-input aggregate
+            // ("CADefaultDevice") through DiscoverySession; it is not a real
+            // microphone and confuses the picker.
+            .filter { !$0.uniqueID.contains("CADefaultDevice") && !$0.localizedName.contains("CADefaultDevice") }
+            .map { MicrophoneDevice(id: $0.uniqueID, name: $0.localizedName) }
     }
 
     /// Fires `handler` on the main queue whenever a device is plugged in,
@@ -372,6 +402,20 @@ extension AudioCaptureService {
             AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
         )
         return (status == noErr && deviceID != kAudioObjectUnknown) ? deviceID : nil
+    }
+
+    /// The device's current nominal sample rate (input scope), or 0 when the
+    /// query fails (device gone mid-take).
+    static func nominalInputRate(_ id: AudioDeviceID) -> Double {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var rate: Double = 0
+        var size = UInt32(MemoryLayout<Double>.size)
+        let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &rate)
+        return status == noErr ? rate : 0
     }
 
     /// True when the device exposes at least one INPUT channel. Bluetooth
