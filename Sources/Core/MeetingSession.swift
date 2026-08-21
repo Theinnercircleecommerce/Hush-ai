@@ -29,6 +29,11 @@ final class MeetingSession: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    /// Non-fatal problem with the CURRENT recording ("system audio stopped
+    /// mid-call") or a transient post-save note ("saved — no mic audio was
+    /// captured"). Rendered under the Record Call pill; nil hides it.
+    @Published private(set) var liveWarning: String?
+
     var isRecording: Bool {
         if case .recording = state { return true }
         return false
@@ -46,6 +51,14 @@ final class MeetingSession: ObservableObject {
     private let systemService = SystemAudioCaptureService()
     private let nameReader = SpeakerNameReader()
     private let transcriber = LocalTranscriptionService()
+
+    /// Fires every 2s while recording; feeds systemService.health() through
+    /// CaptureWatchdog. Main-actor only.
+    private var watchdogTimer: Timer?
+    /// Keeps the Mac (and display — caption OCR needs frames) awake while
+    /// recording. Without it a call longer than the sleep timeout stops
+    /// capturing halfway through with no error anywhere.
+    private var sleepActivity: NSObjectProtocol?
 
     private init() {}
 
@@ -89,16 +102,80 @@ final class MeetingSession: ObservableObject {
                 try await systemService.start(excludeWindowIDs: hushWindowIDs)
                 try micService.startRecording()
                 TalkHotkeyMonitor.diag("MEETING recording — mic + system audio live")
-                state = .recording(startedAt: Date())
+                let startedAt = Date()
+                state = .recording(startedAt: startedAt)
+                liveWarning = nil
+                beginSleepBlocker()
+                startWatchdog(startedAt: startedAt)
             } catch {
                 TalkHotkeyMonitor.diag("MEETING start failed — \(error.localizedDescription)")
                 let systemURL = await systemService.stop()
                 let mic = micService.stopRecording()
                 if let systemURL { try? FileManager.default.removeItem(at: systemURL) }
                 if let mic { try? FileManager.default.removeItem(at: mic.url) }
+                endSleepBlocker()
+                stopWatchdog()
                 state = .failed(error.localizedDescription)
                 scheduleFailureClear()
             }
+        }
+    }
+
+    private func beginSleepBlocker() {
+        guard sleepActivity == nil else { return }
+        sleepActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled],
+            reason: "Hush is recording a meeting")
+    }
+
+    private func endSleepBlocker() {
+        if let activity = sleepActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            sleepActivity = nil
+        }
+    }
+
+    private func startWatchdog(startedAt: Date) {
+        watchdogTimer?.invalidate()
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.watchdogTick(startedAt: startedAt) }
+        }
+    }
+
+    private func stopWatchdog() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
+    }
+
+    /// The mic leg self-heals inside AudioCaptureService (its own 0-frame
+    /// watchdog and rebuild path) and is deliberately not watched here.
+    /// This only covers the system leg, which had NO mid-call failure
+    /// signal at all before — a dead SCStream looked exactly like a quiet
+    /// room until stop().
+    private func watchdogTick(startedAt: Date) {
+        guard case .recording = state else { return }
+        switch CaptureWatchdog.verdict(health: systemService.health(),
+                                       startedAt: startedAt, now: Date()) {
+        case .alive, .waitingForFirstBuffer:
+            // A stream that recovers (permission re-granted mid-call)
+            // unsticks the banner instead of leaving a stale scare on screen.
+            if liveWarning != nil { liveWarning = nil }
+        case .dead(let reason):
+            if liveWarning != reason {
+                liveWarning = reason
+                TalkHotkeyMonitor.diag("MEETING watchdog — \(reason)")
+            }
+        }
+    }
+
+    /// Post-save note ("saved — no mic audio was captured"): visible long
+    /// enough to read, then gone. Guarded so a later message is never wiped
+    /// by an older timer.
+    private func flashWarning(_ message: String) {
+        liveWarning = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            guard let self, self.liveWarning == message else { return }
+            self.liveWarning = nil
         }
     }
 
@@ -116,6 +193,9 @@ final class MeetingSession: ObservableObject {
     private func stop() {
         guard case .recording(let startedAt) = state else { return }
         state = .processing
+        stopWatchdog()
+        endSleepBlocker()
+        liveWarning = nil
         let duration = Date().timeIntervalSince(startedAt)
         let mic = micService.stopRecording()
         let ticks = nameReader.snapshotTicks()
@@ -137,20 +217,32 @@ final class MeetingSession: ObservableObject {
                 scheduleFailureClear()
                 return
             }
-            guard let mic, let systemURL else {
-                TalkHotkeyMonitor.diag("MEETING discarded — missing audio (mic: \(mic != nil), system: \(systemURL != nil))")
-                state = .failed(mic == nil ? "no mic audio captured" : "no system audio captured")
+            // One dead leg used to delete the OTHER leg's perfectly good
+            // audio and fail the whole meeting. Now only a total loss fails.
+            let legs = MeetingLegs.from(mic: mic?.url, system: systemURL)
+            guard legs != .neither else {
+                TalkHotkeyMonitor.diag("MEETING discarded — no audio captured on either leg")
+                state = .failed("no audio captured")
                 scheduleFailureClear()
                 return
+            }
+            if let warning = legs.warningAfterSave {
+                TalkHotkeyMonitor.diag("MEETING degraded — \(warning)")
             }
 
             do {
                 let language = AppSettings.shared.primaryLanguage
                 TalkHotkeyMonitor.diag("MEETING transcribing — \(Int(duration))s, \(ticks.count) speaker ticks, \(names.count) names")
-                let micSegments = try await transcriber.transcribeSegments(
-                    fileURL: mic.url, modelSize: Self.whisperModel, language: language)
-                let systemSegments = try await transcriber.transcribeSegments(
-                    fileURL: systemURL, modelSize: Self.whisperModel, language: language)
+                var micSegments: [TranscriptSegment] = []
+                if let mic {
+                    micSegments = try await transcriber.transcribeSegments(
+                        fileURL: mic.url, modelSize: Self.whisperModel, language: language)
+                }
+                var systemSegments: [TranscriptSegment] = []
+                if let systemURL {
+                    systemSegments = try await transcriber.transcribeSegments(
+                        fileURL: systemURL, modelSize: Self.whisperModel, language: language)
+                }
                 TalkHotkeyMonitor.diag("MEETING transcribed — \(micSegments.count) mic / \(systemSegments.count) system segments")
 
                 let lines = TranscriptMerger.merge(micSegments: micSegments,
@@ -181,6 +273,7 @@ final class MeetingSession: ObservableObject {
                 }
                 MeetingStore.shared.save(meeting)
                 state = .idle
+                if let warning = legs.warningAfterSave { flashWarning(warning) }
             } catch {
                 state = .failed(error.localizedDescription)
                 scheduleFailureClear()
