@@ -35,6 +35,22 @@ final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegat
     private let audioQueue = DispatchQueue(label: "com.hush.meeting.audio")
     private let frameQueue = DispatchQueue(label: "com.hush.meeting.frames")
 
+    /// Health counters, read by MeetingSession's watchdog timer from the
+    /// main actor while the stream callbacks write from their own queues.
+    private let healthLock = NSLock()
+    private var buffersDelivered: Int64 = 0
+    private var lastBufferAt: Date?
+    private var streamDied = false
+
+    /// Thread-safe snapshot for CaptureWatchdog.
+    func health() -> CaptureHealth {
+        healthLock.lock()
+        defer { healthLock.unlock() }
+        return CaptureHealth(buffersDelivered: buffersDelivered,
+                             lastBufferAt: lastBufferAt,
+                             streamDied: streamDied)
+    }
+
     /// - Parameter excludeWindowIDs: Hush's own window numbers, ALREADY read on
     ///   the main actor by the caller.
     ///
@@ -82,6 +98,12 @@ final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegat
         fileURL = url
         converter = nil
 
+        healthLock.lock()
+        buffersDelivered = 0
+        lastBufferAt = nil
+        streamDied = false
+        healthLock.unlock()
+
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: frameQueue)
@@ -117,11 +139,24 @@ final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegat
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         // Capture died underneath us (display unplugged, permission pulled).
-        // Keep what was written; MeetingSession finds out at stop().
+        // Keep what was written; the watchdog surfaces this DURING the call
+        // now, instead of MeetingSession finding out at stop().
+        healthLock.lock()
+        streamDied = true
+        healthLock.unlock()
+        TalkHotkeyMonitor.diag("MEETING system stream DIED — \(error.localizedDescription)")
         self.stream = nil
     }
 
     private func handleAudio(_ sampleBuffer: CMSampleBuffer) {
+        // Counted BEFORE the file/format guards below: a buffer arriving is
+        // proof the stream is alive, even on a take where the write path is
+        // unhappy. Conflating the two would report a healthy stream as dead.
+        healthLock.lock()
+        buffersDelivered += 1
+        lastBufferAt = Date()
+        healthLock.unlock()
+
         guard let file = audioFile,
               let pcm = sampleBuffer.asPCMBuffer else { return }
         if converter == nil {
