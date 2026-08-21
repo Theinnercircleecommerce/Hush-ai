@@ -374,6 +374,22 @@ struct NudgeMenuView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                // Recording is degraded but still running (or just saved
+                // short a leg). Never fatal — the pill keeps its own state.
+                if let warning = meeting.liveWarning {
+                    HStack(spacing: 5) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(warning)
+                            .font(.system(size: 11, weight: .medium))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundColor(Color(red: 0.95, green: 0.65, blue: 0.25))
+                    .padding(.leading, 2)
+                    .transition(.opacity)
+                }
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 14)
