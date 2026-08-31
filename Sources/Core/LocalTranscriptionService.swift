@@ -79,8 +79,13 @@ class LocalTranscriptionService {
         }
         if let l = language, !l.isEmpty, l != "Auto-detect" {
             options.language = l
+        } else {
+            // WhisperKit defaults detectLanguage to false when a prefill prompt is
+            // used, which silently decodes everything as English. Force real
+            // per-window detection so mixed-language audio (e.g. EN + NL) works.
+            options.detectLanguage = true
         }
-        
+
         // WhisperKit transcribe returns an array of TranscriptionResult
         let results = try await pipe.transcribe(audioPath: fileURL.path, decodeOptions: options)
         
@@ -124,6 +129,9 @@ class LocalTranscriptionService {
         var options = DecodingOptions()
         if let l = language, !l.isEmpty, l != "Auto-detect" {
             options.language = l
+        } else {
+            // Same as transcribe(): without this flag, "Auto-detect" is English-only.
+            options.detectLanguage = true
         }
 
         let results = try await pipe.transcribe(audioPath: fileURL.path, decodeOptions: options)
