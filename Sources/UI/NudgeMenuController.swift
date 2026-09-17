@@ -201,10 +201,14 @@ final class NudgeMenuController {
         currentPageSize = NudgeMenuLayout.homeSize
 
         // Fixed-size window pinned top-center; never animated.
+        // The window is lifted `topOverhang` ABOVE the screen's top edge so
+        // the system's 1pt rim around the panel silhouette is cut off there
+        // instead of drawing a grey line across the top of the display. The
+        // content is padded down by the same amount, so nothing moves.
         let size = NudgeMenuLayout.panelSize
         panel.setFrame(
             NSRect(x: screen.frame.midX - size.width / 2,
-                   y: screen.frame.maxY - size.height,
+                   y: screen.frame.maxY - size.height + NudgeMenuLayout.topOverhang,
                    width: size.width, height: size.height),
             display: false
         )
@@ -301,6 +305,14 @@ enum NudgeMenuLayout {
     /// starts at ~548pt (right edge of strip ends at ~380pt). Both clear by
     /// ≥36pt.
     static let panelSize = CGSize(width: 580, height: 640)
+
+    /// macOS draws a 1pt light rim around the panel's silhouette. On the top
+    /// edge that rim lands flat on the screen's top edge and reads as a grey
+    /// line across the display. The window is pushed this far above the top
+    /// edge — and the shape drawn this much taller, with the content padded
+    /// down to match — so the rim's TOP run is clipped off-screen while the
+    /// visible geometry stays byte-for-byte where it was.
+    static let topOverhang: CGFloat = 3
     static let homeSize = CGSize(width: 580, height: 248)
     static let settingsSize = CGSize(width: 580, height: 640)
     static let subpageSize = CGSize(width: 580, height: 560)
@@ -326,4 +338,10 @@ final class KeyableMenuPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// macOS otherwise shoves any window back below the screen's top edge.
+    /// The panel deliberately overhangs it — see NudgeMenuLayout.topOverhang.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
 }

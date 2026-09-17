@@ -86,7 +86,14 @@ struct NudgeMenuView: View {
             // clips it, so nothing re-flows during the open/close spring.
             .frame(width: page.panelSize.width, height: page.panelSize.height, alignment: .top)
             .opacity(expanded ? 1 : 0)
-            .frame(width: size.width, height: size.height, alignment: .top)
+            // The window sits topOverhang above the screen's top edge so the
+            // system rim is clipped there. Grow the shape by the same amount
+            // and push the content down by it, so every visible pixel below
+            // the screen edge lands exactly where it did before.
+            .padding(.top, NudgeMenuLayout.topOverhang)
+            .frame(width: size.width,
+                   height: size.height + NudgeMenuLayout.topOverhang,
+                   alignment: .top)
             .background(
                 NudgeNotchShape(topCornerRadius: 10, bottomCornerRadius: 24)
                     .fill(Color(red: 0.05, green: 0.05, blue: 0.05))
