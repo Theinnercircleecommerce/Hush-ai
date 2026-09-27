@@ -39,6 +39,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         TalkHotkeyMonitor.shared.start()
 
+        // Esc during a hold cancels it — ask or dictation.
+        EscapeMonitor.shared.onEscape = { [weak self] in
+            guard let self else { return }
+            if MainActor.assumeIsolated({ TalkSession.shared.isHolding }) {
+                MainActor.assumeIsolated { TalkSession.shared.cancel() }
+            } else if self.appState.isRecording {
+                self.isHandsFreeMode = false
+                self.appState.cancelRecording()
+            }
+        }
+        EscapeMonitor.shared.start()
+
         // Open onboarding if not completed, otherwise launch silently in the menu bar!
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if !AppSettings.shared.hasCompletedOnboarding {

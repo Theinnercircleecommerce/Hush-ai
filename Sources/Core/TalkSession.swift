@@ -44,7 +44,7 @@ final class TalkSession {
 
     /// True only while the hotkey is (believed to be) held down, i.e. between
     /// a successful `begin()` and `end()`.
-    private var isHolding = false
+    private(set) var isHolding = false
 
     /// Watchdog for a LOST release. If the paired `onRelease` never arrives —
     /// fast user switch, app suspended mid-hold, monitor dropped — nothing
@@ -232,6 +232,19 @@ final class TalkSession {
                 self.fail(message)
             }
         }
+    }
+
+    /// Esc while holding: drop everything, back to idle. No transcription, no ask.
+    func cancel() {
+        guard isBusy, isHolding else { return }
+        stopHoldWatchdog()
+        isHolding = false
+        _ = CircleOverlayController.shared.end()
+        _ = appState?.audioService.stopRecording()
+        isBusy = false
+        appState?.isAsking = false
+        appState?.hudState = .idle
+        TalkHotkeyMonitor.diag("SESSION cancelled — Esc")
     }
 
     // MARK: - The flow

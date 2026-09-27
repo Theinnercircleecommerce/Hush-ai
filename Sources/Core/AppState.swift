@@ -88,6 +88,13 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Esc while dictating: close the mic and throw the take away.
+    func cancelRecording() {
+        guard audioService.isRecording else { return }
+        _ = audioService.stopRecording()
+        hudState = .idle
+    }
+
     func stopRecording() {
         guard let result = audioService.stopRecording() else {
             // No audio ever arrived (mic still opening, or a dead Bluetooth
