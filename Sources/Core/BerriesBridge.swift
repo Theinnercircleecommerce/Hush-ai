@@ -25,6 +25,8 @@ struct BerriesConnection {
     /// Chat title, for the diagnostic line on the answer bubble.
     let chatTitle: String
     let projectPath: String
+    /// Who answers — "Berries Code" or "Berrie" — for the spoken error lines.
+    let appName: String
 
     var askURL: URL? { URL(string: "http://127.0.0.1:\(port)/ask") }
 }
@@ -67,18 +69,32 @@ enum BerriesBridge {
     ///
     /// Cheap enough to call on the hotkey press path: one small file read.
     static func connection() -> BerriesConnection? {
-        guard let data = try? Data(contentsOf: handshakeURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        (try? Data(contentsOf: handshakeURL)).flatMap { parseHandshake($0, appName: "Berries Code") }
+    }
+
+    private static var berrieHandshakeURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Mira/brain-bridge.json")
+    }
+
+    /// Berrie's own brain (app/daemon.ts in the berrie repo), when it's running.
+    /// Same /ask contract as Berries Code, so the rest of this file is shared.
+    static func berrieConnection() -> BerriesConnection? {
+        (try? Data(contentsOf: berrieHandshakeURL)).flatMap { parseHandshake($0, appName: "Berrie") }
+    }
+
+    nonisolated static func parseHandshake(_ data: Data, appName: String) -> BerriesConnection? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               json["connected"] as? Bool == true,
               let port = json["port"] as? Int, port > 0,
               let token = json["token"] as? String, !token.isEmpty
         else { return nil }
-
         return BerriesConnection(
             port: port,
             token: token,
-            chatTitle: (json["chat"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Berries Code",
-            projectPath: json["project"] as? String ?? ""
+            chatTitle: (json["chat"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? appName,
+            projectPath: json["project"] as? String ?? "",
+            appName: appName
         )
     }
 
@@ -96,7 +112,7 @@ enum BerriesBridge {
             throw BerriesError(message: "I didn't catch that.")
         }
         guard let url = connection.askURL else {
-            throw BerriesError(message: "Couldn't reach Berries Code.")
+            throw BerriesError(message: "Couldn't reach \(connection.appName).")
         }
 
         let drop = try writeScreenshots(screens: screens, croppedRegion: croppedRegion)
@@ -126,17 +142,19 @@ enum BerriesBridge {
         do {
             (data, response) = try await URLSession(configuration: config).data(for: request)
         } catch {
-            throw BerriesError(message: "Berries Code didn't answer — is it still open?")
+            throw BerriesError(message: "\(connection.appName) didn't answer — is it still open?")
         }
 
         if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-            throw BerriesError(message: "Berries Code restarted — reconnect with @hush.")
+            throw BerriesError(message: connection.appName == "Berrie"
+                ? "Berrie restarted — ask me again."
+                : "Berries Code restarted — reconnect with @hush.")
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw BerriesError(message: "Berries Code sent something I couldn't read.")
+            throw BerriesError(message: "\(connection.appName) sent something I couldn't read.")
         }
         if json["ok"] as? Bool != true {
-            throw BerriesError(message: json["error"] as? String ?? "Berries Code couldn't answer that.")
+            throw BerriesError(message: json["error"] as? String ?? "\(connection.appName) couldn't answer that.")
         }
 
         let full = json["text"] as? String ?? ""

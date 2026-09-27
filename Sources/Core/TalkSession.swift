@@ -102,7 +102,8 @@ final class TalkSession {
         //
         // A connected Berries Code chat answers on its own Claude login, so
         // Hush's key isn't needed on that path — only when we answer ourselves.
-        if BerriesBridge.connection() == nil, KeychainStore.get(.anthropic) == nil {
+        if BerriesBridge.connection() == nil, BerriesBridge.berrieConnection() == nil,
+           KeychainStore.get(.anthropic) == nil {
             TalkHotkeyMonitor.diag("SESSION blocked — no anthropic key")
             fail("add your api key in settings")
             return
@@ -275,7 +276,7 @@ final class TalkSession {
 
         // A chat wearing the @hush pill takes over from here: it answers with
         // the project in front of it instead of screenshots alone.
-        if let berries = BerriesBridge.connection() {
+        if let berries = BerriesBridge.connection() ?? BerriesBridge.berrieConnection() {
             try await runViaBerries(berries, transcript: transcript, screens: screens, crop: crop)
             return
         }
@@ -384,7 +385,8 @@ final class TalkSession {
 
         onAnswerChunk?(answer.spoken)
 
-        guard KeychainStore.get(.openai) != nil, !answer.spoken.isEmpty else {
+        guard KeychainStore.get(.openai) != nil || BerriesBridge.berrieConnection() != nil,
+              !answer.spoken.isEmpty else {
             TalkHotkeyMonitor.diag("SESSION berries — nothing to speak, idle")
             appState.hudState = .idle
             return
