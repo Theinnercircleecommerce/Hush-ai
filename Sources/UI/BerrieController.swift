@@ -106,23 +106,41 @@ final class BerrieController {
     @objc private func quit() { NSApplication.shared.terminate(nil) }
 }
 
-/// Click vs drag: `performDrag` runs the whole drag and returns on mouse-up.
-/// If the window didn't move it was a click.
+/// Click vs drag, tracked by hand: `performDrag(with:)` hands off to the
+/// window server and returns before the mouse moves on a non-activating
+/// panel, so every press read as a click. Moving the window ourselves on
+/// mouseDragged is deterministic.
 final class BerrieClickView: NSView {
     var onClick: ((NSEvent) -> Void)?
     var onMoved: ((CGPoint) -> Void)?
 
+    private var downMouse: NSPoint?
+    private var downOrigin: NSPoint?
+    private var dragged = false
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        let before = window.frame.origin
-        window.performDrag(with: event)
-        let after = window.frame.origin
-        if hypot(after.x - before.x, after.y - before.y) < 3 {
-            onClick?(event)
+        downMouse = NSEvent.mouseLocation
+        downOrigin = window?.frame.origin
+        dragged = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window, let downMouse, let downOrigin else { return }
+        let now = NSEvent.mouseLocation
+        let dx = now.x - downMouse.x, dy = now.y - downMouse.y
+        if !dragged, hypot(dx, dy) < 3 { return }
+        dragged = true
+        window.setFrameOrigin(NSPoint(x: downOrigin.x + dx, y: downOrigin.y + dy))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { downMouse = nil; downOrigin = nil; dragged = false }
+        if dragged, let window {
+            onMoved?(window.frame.origin)
         } else {
-            onMoved?(after)
+            onClick?(event)
         }
     }
 }
@@ -140,7 +158,7 @@ private final class BerriePanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        isMovable = true
+        isMovable = false   // BerrieClickView moves it by hand
         isFloatingPanel = true
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
