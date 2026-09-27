@@ -179,14 +179,41 @@ final class SpeechOutputService: NSObject, ObservableObject {
     /// Berrie isn't running or her voice failed and there is a key.
     private func fetchTask(text: String, voice: String, apiKey: String?,
                            berrie: BerriesConnection?) -> Task<Data, Error> {
-        Task.detached {
-            if let berrie {
-                do { return try await Self.fetchBerrieAudio(text: text, connection: berrie) }
-                catch { TalkHotkeyMonitor.diag("SpeechOutputService: Berrie voice failed – \(error.localizedDescription)") }
+        let style = AppSettings.shared.ttsStyle
+        return Task.detached {
+            // OpenAI first while the owner wants an accent: Kokoro's voices are
+            // fixed and can't do one. Berrie's local voice is the free backup.
+            if let apiKey {
+                do { return try await Self.fetchAudio(text: text, voice: voice, style: style, apiKey: apiKey) }
+                catch { TalkHotkeyMonitor.diag("SpeechOutputService: OpenAI voice failed – \(error.localizedDescription)") }
             }
-            guard let apiKey else { throw TTSError.badResponse }
-            return try await Self.fetchAudio(text: text, voice: voice, apiKey: apiKey)
+            guard let berrie else { throw TTSError.badResponse }
+            return try await Self.fetchBerrieAudio(text: text, connection: berrie)
         }
+    }
+
+    /// The OpenAI speech request. `style` is the model's spoken-style
+    /// instruction (accent, mood); empty means the voice's own default.
+    nonisolated static func openAISpeechRequest(text: String, voice: String, style: String,
+                                                apiKey: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/speech")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Claude's client uses 20s; without this the TTS fetch inherits the
+        // 60s default and could hold `.speaking` for a minute on a hung POST.
+        request.timeoutInterval = 20
+
+        var body: [String: String] = [
+            "model": ttsModel,
+            "voice": voice,
+            "input": text,
+            "response_format": "mp3"
+        ]
+        let trimmedStyle = style.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedStyle.isEmpty { body["instructions"] = trimmedStyle }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return request
     }
 
     nonisolated static func berrieSpeakRequest(text: String, connection: BerriesConnection) -> URLRequest? {
@@ -284,22 +311,8 @@ final class SpeechOutputService: NSObject, ObservableObject {
     ///
     /// `static` + `nonisolated` so it runs off the main actor from a detached
     /// fetch Task without hopping back for each byte.
-    private static func fetchAudio(text: String, voice: String, apiKey: String) async throws -> Data {
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/speech")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Claude's client uses 20s; without this the TTS fetch inherits the
-        // 60s default and could hold `.speaking` for a minute on a hung POST.
-        request.timeoutInterval = 20
-
-        let body: [String: String] = [
-            "model": ttsModel,
-            "voice": voice,
-            "input": text,
-            "response_format": "mp3"
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    private static func fetchAudio(text: String, voice: String, style: String, apiKey: String) async throws -> Data {
+        let request = openAISpeechRequest(text: text, voice: voice, style: style, apiKey: apiKey)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

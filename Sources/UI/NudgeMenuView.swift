@@ -1138,6 +1138,14 @@ struct NudgeMenuView: View {
                             .colorScheme(.dark)
                         }
                         rowDivider
+                        settingsRow(icon: "theatermasks", title: "Accent / mood") {
+                            TextField("e.g. thick Russian accent, deadpan", text: $settings.ttsStyle)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                                .frame(width: 180)
+                                .colorScheme(.dark)
+                        }
+                        rowDivider
                         settingsRow(icon: "text.bubble", title: "Written answer") {
                             Toggle("", isOn: $settings.showAnswerBubble)
                                 .toggleStyle(.switch)

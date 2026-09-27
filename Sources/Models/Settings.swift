@@ -95,6 +95,11 @@ class AppSettings: ObservableObject {
     @Published var ttsVoice: String {
         didSet { UserDefaults.standard.set(ttsVoice, forKey: "ttsVoice") }
     }
+    /// How the OpenAI voice should sound (accent, mood). Empty = plain.
+    @Published var ttsStyle: String {
+        didSet { UserDefaults.standard.set(ttsStyle, forKey: "ttsStyle") }
+    }
+    static let defaultTTSStyle = "Speak English with a thick, warm Russian accent. Deadpan, dry humour, unhurried."
     @Published var showAnswerBubble: Bool {
         didSet { UserDefaults.standard.set(showAnswerBubble, forKey: "showAnswerBubble") }
     }
@@ -153,7 +158,8 @@ class AppSettings: ObservableObject {
         self.talkStopSound = defaults.string(forKey: "talkStopSound") ?? "Bottle"
         self.whisperKitModelSize = defaults.string(forKey: "whisperKitModelSize") ?? "tiny"
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
-        self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "alloy"
+        self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "onyx"
+        self.ttsStyle = defaults.string(forKey: "ttsStyle") ?? Self.defaultTTSStyle
         // Owner preference: voice-only by default; the written answer is opt-in.
         self.showAnswerBubble = defaults.object(forKey: "showAnswerBubble") as? Bool ?? false
         self.talkCombo = defaults.string(forKey: "talkCombo") ?? "control+option"
