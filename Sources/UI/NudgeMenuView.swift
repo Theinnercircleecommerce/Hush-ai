@@ -7,7 +7,7 @@ struct HotkeyString {
         if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
             return shortcut.description
         }
-        return "⇧A"
+        return "⌥Z"
     }
 }
 

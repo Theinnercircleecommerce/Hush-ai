@@ -16,6 +16,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if KeyMigration.needed(defaults: .standard) {
+            KeyMigration.run(defaults: .standard, settings: AppSettings.shared)
+        }
         // Initialize Sparkle Updater
         updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         // Setup initial dock state

@@ -162,6 +162,6 @@ class AppSettings: ObservableObject {
         self.ttsStyle = defaults.string(forKey: "ttsStyle") ?? Self.defaultTTSStyle
         // Owner preference: voice-only by default; the written answer is opt-in.
         self.showAnswerBubble = defaults.object(forKey: "showAnswerBubble") as? Bool ?? false
-        self.talkCombo = defaults.string(forKey: "talkCombo") ?? "control+option"
+        self.talkCombo = defaults.string(forKey: "talkCombo") ?? "option+shift"
     }
 }
