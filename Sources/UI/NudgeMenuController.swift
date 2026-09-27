@@ -44,7 +44,7 @@ final class NudgeMenuController {
     /// the zone on the way somewhere else doesn't trigger the panel.
     private var dwellTicks = 0
 
-    func attach(appState: AppState) {
+    func attach(appState: AppState, hover: Bool = true) {
         self.appState = appState
         // Auto-close the panel the moment dictation starts.
         stateCancellable = appState.$hudState
@@ -53,7 +53,7 @@ final class NudgeMenuController {
                 if state != .idle { self?.close() }
             }
         makePanel(appState: appState)
-        startHoverMonitoring()
+        if hover { startHoverMonitoring() }
     }
 
     /// Built once, kept alive forever. Creating the panel + hosting view is

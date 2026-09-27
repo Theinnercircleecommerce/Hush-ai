@@ -21,8 +21,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Setup initial dock state
         updateActivationPolicy(showInDock: AppSettings.shared.showInDock)
         
-        // Show the idle pill HUD persistently right away!
-        NotchNudgeController.shared.show(appState: self.appState)
+        // Berrie on screen; the settings panel opens from his click menu.
+        BerrieController.shared.show(appState: self.appState)
+        NudgeMenuController.shared.attach(appState: self.appState, hover: false)
 
         // Circle-to-ask: hold ⌃⌥, circle a region, speak, hear the answer.
         // Both callbacks are delivered on the main queue by the monitor.

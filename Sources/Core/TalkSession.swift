@@ -526,6 +526,7 @@ final class TalkSession {
     /// the screenshots sent to Claude.
     private func hushWindows() -> [NSWindow] {
         CircleOverlayController.shared.panelWindows
+            + BerrieController.shared.panelWindows
             + NotchNudgeController.shared.panelWindows
             + NudgeMenuController.shared.panelWindows
             + AnswerBubbleController.shared.panelWindows

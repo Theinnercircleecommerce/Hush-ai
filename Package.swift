@@ -25,7 +25,7 @@ let package = Package(
                 .product(name: "WhisperKit", package: "WhisperKit")
             ],
             path: "Sources",
-            resources: [.process("Assets.xcassets")]
+            resources: [.process("Assets.xcassets"), .copy("Berrie")]
         ),
         .testTarget(
             name: "HushTests",
