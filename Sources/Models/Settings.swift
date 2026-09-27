@@ -28,6 +28,25 @@ struct TalkCombo: Identifiable {
     }
 }
 
+/// Where a spoken answer is also written. Three options so the owner can
+/// try each; `voice` shows nothing.
+enum AnswerDisplay: String, CaseIterable {
+    case bubble, voice, cursor
+
+    var label: String {
+        switch self {
+        case .bubble: return "Next to Berrie"
+        case .voice: return "Voice only"
+        case .cursor: return "At the cursor"
+        }
+    }
+
+    static func migrate(stored: String?, legacyShowBubble: Bool?) -> AnswerDisplay {
+        if let stored, let v = AnswerDisplay(rawValue: stored) { return v }
+        return legacyShowBubble == true ? .cursor : .bubble
+    }
+}
+
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
     
@@ -100,9 +119,11 @@ class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(ttsStyle, forKey: "ttsStyle") }
     }
     static let defaultTTSStyle = "Speak English with a thick, warm Russian accent. Deadpan, dry humour, unhurried."
-    @Published var showAnswerBubble: Bool {
-        didSet { UserDefaults.standard.set(showAnswerBubble, forKey: "showAnswerBubble") }
+    /// AnswerDisplay.rawValue.
+    @Published var answerDisplay: String {
+        didSet { UserDefaults.standard.set(answerDisplay, forKey: "answerDisplay") }
     }
+    var answerDisplayMode: AnswerDisplay { AnswerDisplay(rawValue: answerDisplay) ?? .bubble }
     /// TalkCombo.id for the hold-to-talk modifier combo.
     @Published var talkCombo: String {
         didSet { UserDefaults.standard.set(talkCombo, forKey: "talkCombo") }
@@ -160,8 +181,10 @@ class AppSettings: ObservableObject {
         self.ollamaModelName = defaults.string(forKey: "ollamaModelName") ?? "llama3.2:3b"
         self.ttsVoice = defaults.string(forKey: "ttsVoice") ?? "onyx"
         self.ttsStyle = defaults.string(forKey: "ttsStyle") ?? Self.defaultTTSStyle
-        // Owner preference: voice-only by default; the written answer is opt-in.
-        self.showAnswerBubble = defaults.object(forKey: "showAnswerBubble") as? Bool ?? false
+        self.answerDisplay = AnswerDisplay.migrate(
+            stored: defaults.string(forKey: "answerDisplay"),
+            legacyShowBubble: defaults.object(forKey: "showAnswerBubble") as? Bool
+        ).rawValue
         self.talkCombo = defaults.string(forKey: "talkCombo") ?? "option+shift"
     }
 }

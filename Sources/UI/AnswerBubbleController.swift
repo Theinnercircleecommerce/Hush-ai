@@ -45,11 +45,20 @@ final class AnswerBubbleController {
     private static let padding: CGFloat = 12
     /// Right-and-below the pointer. AppKit global space is bottom-left origin,
     /// so "below" the cursor is a NEGATIVE y offset.
-    private static let cursorOffset = CGPoint(x: 20, y: -30)
+    nonisolated private static let cursorOffset = CGPoint(x: 20, y: -30)
     private static let fadeDuration: TimeInterval = 0.3
     private static let autoClearDelay: TimeInterval = 6
 
     private init() {}
+
+    /// Top-left of the bubble. Next to Berrie's right edge, or right-and-
+    /// below the pointer. AppKit global space, bottom-left origin.
+    nonisolated static func anchor(for mode: AnswerDisplay, berrie: NSRect?, cursor: CGPoint) -> CGPoint {
+        if mode == .bubble, let berrie {
+            return CGPoint(x: berrie.maxX + 8, y: berrie.maxY)
+        }
+        return CGPoint(x: cursor.x + cursorOffset.x, y: cursor.y + cursorOffset.y)
+    }
 
     /// The bubble's window, for excluding Hush's own window from the
     /// screenshots sent to Claude. Empty until the first append builds it.
@@ -143,8 +152,12 @@ final class AnswerBubbleController {
         anchorScreen = screen
         // (+20, −30): right of and below the pointer, in AppKit bottom-left
         // global coordinates. This point is the bubble's TOP-LEFT corner.
-        anchorTopLeft = CGPoint(x: cursor.x + Self.cursorOffset.x,
-                                y: cursor.y + Self.cursorOffset.y)
+        let mode = AppSettings.shared.answerDisplayMode
+        let berrie = BerrieController.shared.panelFrame
+        anchorTopLeft = Self.anchor(for: mode, berrie: berrie, cursor: cursor)
+        if mode == .bubble, let berrie {
+            anchorScreen = NSScreen.screens.first { $0.frame.intersects(berrie) } ?? anchorScreen
+        }
     }
 
     /// Size the panel to fit the accumulated text, then place it so its

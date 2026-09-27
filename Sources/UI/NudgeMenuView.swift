@@ -1147,9 +1147,14 @@ struct NudgeMenuView: View {
                         }
                         rowDivider
                         settingsRow(icon: "text.bubble", title: "Written answer") {
-                            Toggle("", isOn: $settings.showAnswerBubble)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
+                            Picker("", selection: $settings.answerDisplay) {
+                                ForEach(AnswerDisplay.allCases, id: \.rawValue) { mode in
+                                    Text(mode.label).tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 150)
+                            .colorScheme(.dark)
                         }
                     }
                 }
