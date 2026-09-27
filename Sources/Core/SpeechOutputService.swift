@@ -118,8 +118,10 @@ final class SpeechOutputService: NSObject, ObservableObject {
     /// actor; the only suspension points are the network fetch and the
     /// wait-for-playback, neither of which blocks the thread.
     private func drain(generation myGeneration: Int) async {
-        guard let apiKey = KeychainStore.get(.openai) else {
-            TalkHotkeyMonitor.diag("SpeechOutputService: no OpenAI key in Keychain; skipping TTS")
+        let berrie = BerriesBridge.berrieConnection()
+        let apiKey = KeychainStore.get(.openai)
+        guard berrie != nil || apiKey != nil else {
+            TalkHotkeyMonitor.diag("SpeechOutputService: no Berrie voice and no OpenAI key; skipping TTS")
             finishDrain(generation: myGeneration)
             return
         }
@@ -137,7 +139,7 @@ final class SpeechOutputService: NSObject, ObservableObject {
         // The text rides along so playback can attribute the cost to it.
         var current: (text: String, fetch: Task<Data, Error>)?
         let firstSegment = pending.removeFirst()
-        current = (firstSegment, fetchTask(text: firstSegment, voice: voice, apiKey: apiKey))
+        current = (firstSegment, fetchTask(text: firstSegment, voice: voice, apiKey: apiKey, berrie: berrie))
 
         while let job = current {
             // Await this segment's audio.
@@ -155,7 +157,7 @@ final class SpeechOutputService: NSObject, ObservableObject {
             // this one, so its audio is ready the moment this segment ends.
             if !pending.isEmpty {
                 let next = pending.removeFirst()
-                current = (next, fetchTask(text: next, voice: voice, apiKey: apiKey))
+                current = (next, fetchTask(text: next, voice: voice, apiKey: apiKey, berrie: berrie))
             } else {
                 current = nil
             }
@@ -173,10 +175,39 @@ final class SpeechOutputService: NSObject, ObservableObject {
     }
 
     /// Build request + perform the HTTP round-trip as a cancellable Task.
-    private func fetchTask(text: String, voice: String, apiKey: String) -> Task<Data, Error> {
+    /// Berrie's local Kokoro voice first (free, on this Mac); OpenAI only if
+    /// Berrie isn't running or her voice failed and there is a key.
+    private func fetchTask(text: String, voice: String, apiKey: String?,
+                           berrie: BerriesConnection?) -> Task<Data, Error> {
         Task.detached {
-            try await Self.fetchAudio(text: text, voice: voice, apiKey: apiKey)
+            if let berrie {
+                do { return try await Self.fetchBerrieAudio(text: text, connection: berrie) }
+                catch { TalkHotkeyMonitor.diag("SpeechOutputService: Berrie voice failed – \(error.localizedDescription)") }
+            }
+            guard let apiKey else { throw TTSError.badResponse }
+            return try await Self.fetchAudio(text: text, voice: voice, apiKey: apiKey)
         }
+    }
+
+    nonisolated static func berrieSpeakRequest(text: String, connection: BerriesConnection) -> URLRequest? {
+        guard let url = URL(string: "http://127.0.0.1:\(connection.port)/speak"),
+              let body = try? JSONSerialization.data(withJSONObject: ["text": text]) else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        return request
+    }
+
+    nonisolated private static func fetchBerrieAudio(text: String, connection: BerriesConnection) async throws -> Data {
+        guard let request = berrieSpeakRequest(text: text, connection: connection) else { throw TTSError.badResponse }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty else {
+            throw TTSError.httpError((response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        return data
     }
 
     /// Initialise the player, start playback, mark `isSpeaking`, and suspend
@@ -197,11 +228,14 @@ final class SpeechOutputService: NSObject, ObservableObject {
             // The speech endpoint returns raw MP3 with no usage block, so the
             // decoded audio length is our only handle on what it cost. Recorded
             // here rather than at fetch time because `duration` needs a player.
-            UsageStore.shared.recordTTS(
-                model: Self.ttsModel,
-                characters: text.count,
-                audioSeconds: p.duration
-            )
+            // WAV = Berrie's local voice, which costs nothing.
+            if !data.starts(with: Array("RIFF".utf8)) {
+                UsageStore.shared.recordTTS(
+                    model: Self.ttsModel,
+                    characters: text.count,
+                    audioSeconds: p.duration
+                )
+            }
         } catch {
             TalkHotkeyMonitor.diag("SpeechOutputService: AVAudioPlayer init failed – \(error.localizedDescription)")
             player = nil

@@ -283,7 +283,7 @@ final class TalkSession {
 
         // Speech is opt-in on the OpenAI key. Decide up front so we only bother
         // pipelining sentences when we can actually speak them.
-        let canSpeak = KeychainStore.get(.openai) != nil
+        let canSpeak = KeychainStore.get(.openai) != nil || BerriesBridge.berrieConnection() != nil
 
         // Sentence-pipelined TTS: accumulate streamed chunks, and the instant
         // the first sentence is complete, hand it to the speech queue while the
