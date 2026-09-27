@@ -6,6 +6,10 @@ import AVFoundation
 class AppState: ObservableObject {
     @Published var hudState: HUDState = .idle
     @Published var audioLevel: Float = 0.0
+    /// True from the ask hotkey press until the answer is done. Lets Berrie
+    /// show "looking" (ask) rather than "listening" (dictation) while both
+    /// are in `.recording`.
+    @Published var isAsking: Bool = false
     
     let audioService = AudioCaptureService()
     let localService = LocalTranscriptionService()

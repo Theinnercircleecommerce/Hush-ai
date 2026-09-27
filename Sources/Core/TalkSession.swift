@@ -139,6 +139,7 @@ final class TalkSession {
 
         // Committed. Anything below must clear isBusy on failure.
         isBusy = true
+        appState.isAsking = true
 
         // Barge-in: a previous answer may still be playing, and its bubble
         // may still be on screen.
@@ -187,12 +188,14 @@ final class TalkSession {
 
         guard let appState = appState else {
             isBusy = false
+            self.appState?.isAsking = false
             TalkHotkeyMonitor.diag("SESSION release — no appState (teardown); overlay and mic closed")
             return
         }
 
         guard let recording = recording else {
             isBusy = false
+            appState.isAsking = false
             appState.hudState = .idle
             TalkHotkeyMonitor.diag("SESSION release — no recording produced, back to idle")
             return
@@ -200,6 +203,7 @@ final class TalkSession {
 
         guard recording.duration >= Self.minimumRecordingDuration else {
             isBusy = false
+            appState.isAsking = false
             appState.hudState = .idle
             TalkHotkeyMonitor.diag(String(format: "SESSION release — recording too short (%.2fs), back to idle", recording.duration))
             return
@@ -218,6 +222,7 @@ final class TalkSession {
         Task { [weak self] in
             guard let self = self else { return }
             defer { self.isBusy = false }
+            defer { appState.isAsking = false }
 
             do {
                 try await self.run(audioURL: recording.url, region: region)
@@ -562,6 +567,7 @@ final class TalkSession {
         errorGeneration += 1
         let generation = errorGeneration
         appState.hudState = .error(short)
+        appState.isAsking = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self = self, self.errorGeneration == generation else { return }
