@@ -87,11 +87,17 @@ final class BerrieController {
 
     private func showMenu(for event: NSEvent, in view: NSView) {
         let menu = NSMenu()
+        menu.addItem(withTitle: "Ask Berrie…", action: #selector(askTyped), keyEquivalent: "").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Berrie", action: #selector(quit), keyEquivalent: "").target = self
         menu.popUp(positioning: nil, at: view.convert(event.locationInWindow, from: nil), in: view)
+    }
+
+    @objc private func askTyped() {
+        BerrieAskController.shared.show(near: panel?.frame)
     }
 
     @objc private func openSettings() {

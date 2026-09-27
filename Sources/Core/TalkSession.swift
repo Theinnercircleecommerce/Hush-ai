@@ -246,6 +246,35 @@ final class TalkSession {
         TalkHotkeyMonitor.diag("SESSION cancelled — Esc")
     }
 
+    /// Typed question from "Ask Berrie…". Same brain, voice and bubble as
+    /// ⌥⇧, with a screenshot of what's on screen; no mic, no circle.
+    func askTyped(_ text: String) {
+        guard !isBusy, let appState else { return }
+        guard let connection = BerriesBridge.connection() ?? BerriesBridge.berrieConnection() else {
+            fail("Berrie's brain isn't running — open Berrie")
+            return
+        }
+        isBusy = true
+        appState.isAsking = true
+        SpeechOutputService.shared.stop()
+        AnswerBubbleController.shared.clear()
+        appState.hudState = .transcribing
+        TalkHotkeyMonitor.diag("SESSION typed ask — \(text.count) chars")
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isBusy = false }
+            defer { appState.isAsking = false }
+            do {
+                let screens = (try? await ScreenCaptureService.captureAll(excluding: self.hushWindows())) ?? []
+                try await self.runViaBerries(connection, transcript: text, screens: screens, crop: nil)
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                self.fail(message)
+            }
+        }
+    }
+
     // MARK: - The flow
 
     private func run(audioURL: URL, region: CGRect?) async throws {
@@ -539,6 +568,7 @@ final class TalkSession {
     private func hushWindows() -> [NSWindow] {
         CircleOverlayController.shared.panelWindows
             + BerrieController.shared.panelWindows
+            + BerrieAskController.shared.panelWindows
             + NotchNudgeController.shared.panelWindows
             + NudgeMenuController.shared.panelWindows
             + AnswerBubbleController.shared.panelWindows
