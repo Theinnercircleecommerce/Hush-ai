@@ -1,12 +1,10 @@
 import Cocoa
 import KeyboardShortcuts
-import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) var shared: AppDelegate!
     
     let appState = AppState()
-    var updaterController: SPUStandardUpdaterController!
     var lastKeyDownTime: Date?
     var isHandsFreeMode = false
     
@@ -16,11 +14,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The body used to be Hush: bring its settings along, once.
+        SettingsMigration.runIfNeeded()
         if KeyMigration.needed(defaults: .standard) {
             KeyMigration.run(defaults: .standard, settings: AppSettings.shared)
         }
-        // Initialize Sparkle Updater
-        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         // Setup initial dock state
         updateActivationPolicy(showInDock: AppSettings.shared.showInDock)
         

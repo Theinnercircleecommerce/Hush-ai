@@ -69,9 +69,6 @@ class AppSettings: ObservableObject {
     @Published var secondaryLanguage: String {
         didSet { UserDefaults.standard.set(secondaryLanguage, forKey: "secondaryLanguage") }
     }
-    @Published var launchAtLogin: Bool {
-        didSet { UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin") }
-    }
     @Published var showInDock: Bool {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
     }
@@ -149,12 +146,6 @@ class AppSettings: ObservableObject {
         
         self.primaryLanguage = defaults.string(forKey: "primaryLanguage") ?? "en"
         self.secondaryLanguage = defaults.string(forKey: "secondaryLanguage") ?? ""
-        
-        if defaults.object(forKey: "launchAtLogin") != nil {
-            self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
-        } else {
-            self.launchAtLogin = true
-        }
         
         if defaults.object(forKey: "showInDock") != nil {
             self.showInDock = defaults.bool(forKey: "showInDock")

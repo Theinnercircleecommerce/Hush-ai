@@ -15,7 +15,7 @@ struct OnboardingView: View {
                 .foregroundColor(.blue)
                 .padding(.top, 40)
             
-            Text("Welcome to Hush")
+            Text("Welcome to Berrie")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             

@@ -1,26 +1,22 @@
 #!/bin/bash
 set -e
 
-echo "Building Hush using Swift Package Manager..."
+echo "Building Berrie's body using Swift Package Manager..."
 swift build -c release
 
-echo "Creating Hush.app bundle..."
-APP_BUNDLE="Hush.app"
+echo "Creating Berrie.app bundle..."
+APP_BUNDLE="Berrie.app"
 rm -rf "$APP_BUNDLE"
 
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 
-cp .build/release/Hush "$APP_BUNDLE/Contents/MacOS/"
+cp .build/release/Hush "$APP_BUNDLE/Contents/MacOS/Berrie"
 
-if [ -d ".build/release/Sparkle.framework" ]; then
-    cp -R ".build/release/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/"
-fi
-
-sed -e 's/$(EXECUTABLE_NAME)/Hush/g' \
-    -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.hush.app/g' \
-    -e 's/$(PRODUCT_NAME)/Hush/g' \
+sed -e 's/$(EXECUTABLE_NAME)/Berrie/g' \
+    -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.berrie.body/g' \
+    -e 's/$(PRODUCT_NAME)/Berrie/g' \
     Info.plist > "$APP_BUNDLE/Contents/Info.plist"
 
 if [ -f "AppIcon.icns" ]; then
@@ -33,7 +29,7 @@ if ls .build/release/*.bundle 1> /dev/null 2>&1; then
 fi
 
 # Fix rpath so it knows to look in the Frameworks directory!
-install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Contents/MacOS/Hush"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Contents/MacOS/Berrie"
 
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
@@ -62,23 +58,7 @@ if ! security find-identity -v -p codesigning | grep -q "$SIGN_IDENTITY"; then
     CODESIGN_OPTS=(--force --sign -)
 fi
 
-# Sign inside-out. --deep is deprecated by Apple and cannot apply the right
-# entitlements to nested code; notarization rejects bundles signed that way.
-SPARKLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
-if [ -d "$SPARKLE" ]; then
-    for nested in \
-        "$SPARKLE/Versions/B/XPCServices/Downloader.xpc" \
-        "$SPARKLE/Versions/B/XPCServices/Installer.xpc" \
-        "$SPARKLE/Versions/B/Autoupdate" \
-        "$SPARKLE/Versions/B/Updater.app"
-    do
-        [ -e "$nested" ] && codesign "${CODESIGN_OPTS[@]}" "$nested"
-    done
-    codesign "${CODESIGN_OPTS[@]}" "$SPARKLE"
-fi
-
-# The app itself signs last, with the entitlements. Nested Sparkle code must
-# NOT inherit them — it has no business holding a microphone entitlement.
+# The app signs with the entitlements (mic) under the hardened runtime.
 if [ -n "$HUSH_RELEASE" ]; then
     codesign "${CODESIGN_OPTS[@]}" --entitlements Hush.entitlements "$APP_BUNDLE"
 else
@@ -88,12 +68,3 @@ fi
 codesign --verify --strict --verbose=2 "$APP_BUNDLE"
 
 echo "App bundle created successfully at $APP_BUNDLE!"
-
-# /Applications/Hush.app is owned by Sparkle — the in-app update button is the
-# only thing that should replace it. Opt in with HUSH_INSTALL=1 when you
-# deliberately want to test a local build in place.
-if [ "$HUSH_INSTALL" = "1" ] && [ -d "/Applications/Hush.app" ]; then
-    echo "HUSH_INSTALL=1 — overwriting /Applications/Hush.app with this local build..."
-    rm -rf /Applications/Hush.app
-    ditto "$APP_BUNDLE" /Applications/Hush.app
-fi

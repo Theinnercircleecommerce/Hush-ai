@@ -12,7 +12,6 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.11.0"),
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
         .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.9.0")
     ],
     targets: [
@@ -21,7 +20,6 @@ let package = Package(
             dependencies: [
                 "KeyboardShortcuts",
                 .product(name: "GRDB", package: "GRDB.swift"),
-                .product(name: "Sparkle", package: "Sparkle"),
                 .product(name: "WhisperKit", package: "WhisperKit")
             ],
             path: "Sources",

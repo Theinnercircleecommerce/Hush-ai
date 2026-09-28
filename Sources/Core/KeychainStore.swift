@@ -24,7 +24,7 @@ enum KeychainStore {
         let status = SecItemAdd(query as CFDictionary, nil)
         if status != errSecSuccess {
             // Account name and numeric status only — never the key material.
-            NSLog("Hush: keychain write failed for %@ (status %d)", key.rawValue, Int(status))
+            NSLog("Berrie: keychain write failed for %@ (status %d)", key.rawValue, Int(status))
         }
     }
 

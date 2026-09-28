@@ -125,7 +125,7 @@ final class MeetingSession: ObservableObject {
         guard sleepActivity == nil else { return }
         sleepActivity = ProcessInfo.processInfo.beginActivity(
             options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled],
-            reason: "Hush is recording a meeting")
+            reason: "Berrie is recording a meeting")
     }
 
     private func endSleepBlocker() {

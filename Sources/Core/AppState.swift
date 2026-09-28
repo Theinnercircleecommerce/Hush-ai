@@ -181,7 +181,7 @@ class AppState: ObservableObject {
                         pasteboard.setString(finalText, forType: .string)
                         
                         // Notify user why it didn't paste
-                        let script = "display notification \"Please enable Accessibility in System Settings for Hush to auto-paste.\" with title \"Transcription Copied to Clipboard\""
+                        let script = "display notification \"Please enable Accessibility in System Settings for Berrie to auto-paste.\" with title \"Transcription Copied to Clipboard\""
                         var error: NSDictionary?
                         if let appleScript = NSAppleScript(source: script) {
                             appleScript.executeAndReturnError(&error)

@@ -21,14 +21,10 @@
 	<key>CFBundleVersion</key>
 	<string>43</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Hush needs microphone access to dictate text.</string>
+	<string>Berrie needs microphone access to hear you.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Hush captures your screen only when you hold the talk shortcut, so it can answer questions about what you see.</string>
+	<string>Berrie captures your screen only while you hold the look shortcut, so he can answer questions about what you see.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Hush uses speech recognition to convert your voice to text.</string>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/Theinnercircleecommerce/Hush-ai/main/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>NYQ1pRyseI6ocKxnoEw63hWYoww6R46Qqiq0p++/zHw=</string>
+	<string>Berrie uses speech recognition to turn your voice into text.</string>
 </dict>
 </plist>

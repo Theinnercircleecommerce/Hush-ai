@@ -56,6 +56,13 @@ struct BerrieView: View {
         resourceBundle?.url(forResource: mood.imageName, withExtension: "png", subdirectory: "Berrie")
     }
 
+    /// 18 pt strawberry for the menu bar. Not a template image — he's red.
+    static let menuBarImage: NSImage = {
+        let img = (image(for: .idle).copy() as? NSImage) ?? NSImage(size: NSSize(width: 18, height: 18))
+        img.size = NSSize(width: 18, height: 18)
+        return img
+    }()
+
     private static var cache: [BerrieMood: NSImage] = [:]
 
     static func image(for mood: BerrieMood) -> NSImage {

@@ -90,6 +90,7 @@ final class BerrieController {
         let menu = NSMenu()
         menu.addItem(withTitle: "Ask Berrie…", action: #selector(askTyped), keyEquivalent: "").target = self
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Dashboard…", action: #selector(openBoard), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -106,11 +107,11 @@ final class BerrieController {
         if let screen { NudgeMenuController.shared.open(on: screen) }
     }
 
-    @objc private func checkForUpdates() {
-        AppDelegate.shared.updaterController.checkForUpdates(nil)
-    }
+    @objc private func openBoard() { BrainShell.openBoard() }
 
-    @objc private func quit() { NSApplication.shared.terminate(nil) }
+    @objc private func checkForUpdates() { BrainShell.checkForUpdates() }
+
+    @objc private func quit() { BrainShell.quit() }
 }
 
 /// Click vs drag, tracked by hand: `performDrag(with:)` hands off to the

@@ -256,7 +256,7 @@ struct NudgeMenuView: View {
                     Text("Add skills")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
-                    Text("Skills give Hush superpowers")
+                    Text("Skills give Berrie superpowers")
                         .font(.system(size: 12))
                         .foregroundColor(Color(red: 0.50, green: 0.50, blue: 0.52))
 
@@ -490,7 +490,7 @@ struct NudgeMenuView: View {
             Text("Agents live here soon")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
-            Text("Hush agents will do tasks for you in the background — coming in a future update.")
+            Text("Berrie agents will do tasks for you in the background — coming in a future update.")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -1169,15 +1169,9 @@ struct NudgeMenuView: View {
                 // SYSTEM
                 settingsSection(title: "SYSTEM") {
                     VStack(spacing: 0) {
-                        settingsRow(icon: "power", title: "Launch at Login") {
-                            Toggle("", isOn: $settings.launchAtLogin)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
-                        rowDivider
                         settingsRow(icon: "dock.rectangle",
                                     title: "Show in Dock",
-                                    subtitle: "Turn off to keep Hush notch only.") {
+                                    subtitle: "Turn off to hide the Dock icon.") {
                             Toggle("", isOn: $settings.showInDock)
                                 .toggleStyle(.switch)
                                 .labelsHidden()
@@ -1213,7 +1207,7 @@ struct NudgeMenuView: View {
                 // SUPPORT
                 settingsSection(title: "SUPPORT") {
                     Button(action: {
-                        AppDelegate.shared.updaterController.checkForUpdates(nil)
+                        BrainShell.checkForUpdates()
                     }) {
                         settingsRow(icon: "arrow.down.circle", title: "Check for Updates") {
                             Image(systemName: "chevron.right")
@@ -1227,12 +1221,12 @@ struct NudgeMenuView: View {
                 // FOOTER
                 VStack(spacing: 8) {
                     settingsSection(title: "") {
-                        Button(action: { NSApplication.shared.terminate(nil) }) {
+                        Button(action: { BrainShell.quit() }) {
                             HStack {
                                 Image(systemName: "power")
                                     .foregroundColor(.red)
                                     .frame(width: 22)
-                                Text("Quit Hush")
+                                Text("Quit Berrie")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.red)
                                 Spacer()
@@ -1244,7 +1238,7 @@ struct NudgeMenuView: View {
                         .buttonStyle(.plain)
                     }
                     if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                        Text("Hush \(version)")
+                        Text("Berrie \(version)")
                             .font(.system(size: 11))
                             .foregroundColor(Color(red: 0.35, green: 0.35, blue: 0.35))
                             .frame(maxWidth: .infinity)

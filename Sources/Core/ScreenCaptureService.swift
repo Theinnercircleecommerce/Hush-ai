@@ -47,13 +47,13 @@ enum ScreenCaptureService {
         } catch {
             // SCShareableContent throws when Screen Recording is not granted.
             throw ScreenCaptureError(
-                message: "enable screen recording for Hush in system settings"
+                message: "enable screen recording for Berrie in system settings"
             )
         }
 
         guard !content.displays.isEmpty else {
             throw ScreenCaptureError(
-                message: "enable screen recording for Hush in system settings"
+                message: "enable screen recording for Berrie in system settings"
             )
         }
 
@@ -149,7 +149,7 @@ enum ScreenCaptureService {
 
         guard !results.isEmpty else {
             throw ScreenCaptureError(
-                message: "enable screen recording for Hush in system settings"
+                message: "enable screen recording for Berrie in system settings"
             )
         }
 
