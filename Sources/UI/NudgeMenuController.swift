@@ -52,8 +52,13 @@ final class NudgeMenuController {
             .sink { [weak self] state in
                 if state != .idle { self?.close() }
             }
-        makePanel(appState: appState)
-        if hover { startHoverMonitoring() }
+        // The settings view reads the Keychain when built, and a new bundle's
+        // first Keychain read blocks on a macOS permission dialog. Build it on
+        // first open, not at launch, so Berrie is on screen before any prompt.
+        if hover {
+            makePanel(appState: appState)
+            startHoverMonitoring()
+        }
     }
 
     /// Built once, kept alive forever. Creating the panel + hosting view is
@@ -192,7 +197,9 @@ final class NudgeMenuController {
 
     func open(on screen: NSScreen) {
         guard !isOpen else { return }
-        guard let appState = appState, let panel = menuPanel else { return }
+        guard let appState = appState else { return }
+        makePanel(appState: appState)
+        guard let panel = menuPanel else { return }
         // Never open while the nudge is busy showing dictation state.
         if appState.hudState != .idle { return }
         isOpen = true
