@@ -85,8 +85,11 @@ final class TalkSession {
 
     // MARK: - Hotkey entry points
 
-    /// ⌃⌥ pressed. Opens the circle overlay and the mic.
-    func begin() {
+    /// Whether this session looks at the screen (⌥⇧) or is voice only (⌥A).
+    private var withScreen = true
+
+    /// Ask key pressed. Opens the mic, and the circle overlay when looking.
+    func begin(withScreen: Bool = true) {
         guard !isBusy else {
             TalkHotkeyMonitor.diag("SESSION press ignored — session already running")
             return
@@ -138,14 +141,15 @@ final class TalkSession {
 
         // Committed. Anything below must clear isBusy on failure.
         isBusy = true
-        appState.isAsking = true
+        self.withScreen = withScreen
+        appState.isAsking = withScreen
 
         // Barge-in: a previous answer may still be playing, and its bubble
         // may still be on screen.
         SpeechOutputService.shared.stop()
         AnswerBubbleController.shared.clear()
 
-        CircleOverlayController.shared.begin()
+        if withScreen { CircleOverlayController.shared.begin() }
 
         do {
             try appState.audioService.startRecording()
@@ -284,7 +288,8 @@ final class TalkSession {
         // reflects the moment the circle closed (not seconds later, after
         // Whisper) and overlaps the transcription work. On the empty-transcript
         // path below we cancel/discard it — the wasted local capture is free.
-        let screensTask = Task { try await ScreenCaptureService.captureAll(excluding: hushWindows()) }
+        let wantScreens = withScreen
+        let screensTask = Task { wantScreens ? try await ScreenCaptureService.captureAll(excluding: hushWindows()) : [] }
 
         let raw: String
         do {
@@ -418,7 +423,8 @@ final class TalkSession {
         guard let appState = appState else { return }
 
         appState.hudState = .transcribing
-        onAnswerChunk?("→ \(connection.chatTitle)\n\n")
+        // Berrie is the default answerer now; only name a BerriesCode chat.
+        if connection.appName != "Berrie" { onAnswerChunk?("→ \(connection.chatTitle)\n\n") }
         TalkHotkeyMonitor.diag("SESSION routing to berries — chat=\(connection.chatTitle)")
 
         let answer = try await BerriesBridge.ask(

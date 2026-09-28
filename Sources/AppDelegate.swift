@@ -39,6 +39,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         TalkHotkeyMonitor.shared.start()
 
+        // Hold ⌥A: ask Berrie by voice, no screenshot.
+        KeyboardShortcuts.onKeyDown(for: .askBerrie) {
+            MainActor.assumeIsolated { TalkSession.shared.begin(withScreen: false) }
+        }
+        KeyboardShortcuts.onKeyUp(for: .askBerrie) {
+            MainActor.assumeIsolated { TalkSession.shared.end() }
+        }
+
         // Esc during a hold cancels it — ask or dictation.
         EscapeMonitor.shared.onEscape = { [weak self] in
             guard let self else { return }

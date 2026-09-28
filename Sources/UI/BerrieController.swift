@@ -68,6 +68,7 @@ final class BerrieController {
         }
         let hosting = PassThroughHostingView(rootView: BerrieView(appState: appState))
         hosting.safeAreaRegions = []
+        hosting.sizingOptions = []
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         container.addSubview(hosting)

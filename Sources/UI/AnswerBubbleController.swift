@@ -135,6 +135,10 @@ final class AnswerBubbleController {
         // stray safe-area inset would offset the bubble's content.
         hosting.safeAreaRegions = []
         hosting.translatesAutoresizingMaskIntoConstraints = true
+        // macOS 13+: a hosting view resizes its window to the SwiftUI intrinsic
+        // size unless told not to — for wrapping text that is a one-word-wide
+        // column. layoutAndPosition() owns the frame.
+        hosting.sizingOptions = []
 
         let panel = BubblePanel(contentRect: NSRect(x: 0, y: 0, width: Self.maxWidth, height: 40))
         panel.contentView = hosting

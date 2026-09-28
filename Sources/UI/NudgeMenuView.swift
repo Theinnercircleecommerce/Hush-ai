@@ -1027,8 +1027,8 @@ struct NudgeMenuView: View {
                 settingsSection(title: "SHORTCUTS") {
                     VStack(spacing: 0) {
                         settingsRow(icon: "hand.draw",
-                                    title: "Talk",
-                                    subtitle: "Hold the combo and speak.") {
+                                    title: "Look",
+                                    subtitle: "Hold, circle something, ask.") {
                             Picker("", selection: $settings.talkCombo) {
                                 ForEach(TalkCombo.all) { combo in
                                     Text(combo.label).tag(combo.id)
@@ -1041,6 +1041,13 @@ struct NudgeMenuView: View {
                         rowDivider
                         settingsRow(icon: "keyboard", title: "Dictate") {
                             KeyboardShortcuts.Recorder(for: .toggleRecord)
+                                .colorScheme(.dark)
+                        }
+                        rowDivider
+                        settingsRow(icon: "bubble.left",
+                                    title: "Ask",
+                                    subtitle: "Hold and ask Berrie. No screenshot.") {
+                            KeyboardShortcuts.Recorder(for: .askBerrie)
                                 .colorScheme(.dark)
                         }
                     }

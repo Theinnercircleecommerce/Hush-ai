@@ -41,6 +41,7 @@ final class BerrieAskController {
             TalkSession.shared.askTyped(text)
         }, onCancel: { [weak self] in self?.close() }))
         hosting.safeAreaRegions = []
+        hosting.sizingOptions = []
         panel.contentView = hosting
         return panel
     }
