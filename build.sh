@@ -33,6 +33,11 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Content
 
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
+# Some SwiftPM resource bundles ship read-only files (0444). The Electron
+# updater's installer (ShipIt) then fails with "Permission denied" while
+# copying the body into place, and the update never installs.
+chmod -R u+rw "$APP_BUNDLE"
+
 echo "Signing the application..."
 # Default: the stable Apple Development identity, so macOS keeps the
 # Accessibility/Screen Recording grants across rebuilds. Ad-hoc signing (-)
