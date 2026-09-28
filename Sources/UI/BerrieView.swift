@@ -56,10 +56,13 @@ struct BerrieView: View {
         resourceBundle?.url(forResource: mood.imageName, withExtension: "png", subdirectory: "Berrie")
     }
 
-    /// 18 pt strawberry for the menu bar. Not a template image — he's red.
+    /// Menu bar strawberry: a template image (silhouette, eyes cut out) so
+    /// macOS draws it black or white to match the other menu bar items.
     static let menuBarImage: NSImage = {
-        let img = (image(for: .idle).copy() as? NSImage) ?? NSImage(size: NSSize(width: 18, height: 18))
-        img.size = NSSize(width: 18, height: 18)
+        let url = resourceBundle?.url(forResource: "menubar@2x", withExtension: "png", subdirectory: "Berrie")
+        let img = url.flatMap { NSImage(contentsOf: $0) } ?? NSImage(size: NSSize(width: 20, height: 20))
+        img.size = NSSize(width: 20, height: 20)
+        img.isTemplate = true
         return img
     }()
 
