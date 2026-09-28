@@ -204,7 +204,10 @@ enum BerriesBridge {
             if let path = write(screen.jpeg, "screen-\(index + 1).jpg") { screenPaths.append(path) }
         }
 
-        guard cropPath != nil || !screenPaths.isEmpty else {
+        // A voice-only ask (⌥A) hands over no screenshot at all — that's fine.
+        // Only complain when there was something to save and nothing got saved.
+        let expected = croppedRegion != nil || !screens.isEmpty
+        guard !expected || cropPath != nil || !screenPaths.isEmpty else {
             throw BerriesError(message: "Couldn't save the screenshot to hand over.")
         }
         return Dropbox(cropPath: cropPath, screenPaths: screenPaths)
